@@ -111,9 +111,11 @@ MatlabLossModel::DoInitialize ()
 	 * Call engOpen with a NULL string. This starts a MATLAB process
      * on the current host using the command "matlab".
 	 */
-	if (!(m_ep = engOpen(""))) {
+	Engine *ep;
+	if (!(ep = engOpen(""))) {
 		NS_LOG_ERROR("Can't start MATLAB engine");
 	}
+	m_ep = ep;
 	NS_ASSERT(m_ep);
 
 	engEvalString(m_ep, "c=3e8;fc = 1930e6;lambda = c/fc;v_km_h = 3.0;v_m_s = v_km_h / 3.6;fd = v_m_s / lambda;");

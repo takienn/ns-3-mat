@@ -1,15 +1,20 @@
 ## -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
-def configure(conf):
-    conf.env.append_value("CXXFLAGS", ["-I/home/kentux/MATLAB/R2015a/extern/include","-I/home/kentux/MATLAB/R2015a/simulink/include",'-ansi','-fexceptions','-fPIC','-fno-omit-frame-pointer','-pthread','-std=c++11'])
-    conf.env.append_value("LINKFLAGS", ['-L/home/kentux/MATLAB/R2015a/bin/glnxa64','-Wl,-rpath-link,/home/kentux/MATLAB/R2015a/bin/glnxa64','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat'])
-	
-
 def build(bld):
 
     lte_module_dependencies = ['core', 'network', 'spectrum', 'stats', 'buildings', 'virtual-net-device','point-to-point','applications','internet','csma']
     if (bld.env['ENABLE_EMU']):
         lte_module_dependencies.append('fd-net-device')
 
+    mat_module = bld.create_ns3_module('matloss',['core','spectrum'])
+    mat_module.source = ['model/matlab-loss-model.cc']
+    mat_headers = bld(features='ns3header')
+    mat_headers.module='matloss'
+    mat_headers.source = ['model/matlab-loss-model.h']
+    mat_module.env.append_value('CXXFLAGS', ["-I/home/kentux/MATLAB/R2015a/extern/include","-I/home/kentux/MATLAB/R2015a/simulink/include",'-ansi','-fexceptions','-fPIC','-fno-omit-frame-pointer','-pthread','-std=c++11'])
+    mat_module.env.append_value('LINKFLAGS', ['-L/home/kentux/MATLAB/R2015a/bin/glnxa64','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat'])  
+# mat_module.env.append_value('LINKFLAGS', ['-L/home/kentux/MATLAB/R2015a/bin/glnxa64','-Wl,-rpath,/home/kentux/MATLAB/R2015a/bin/glnxa64','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat','-L/home/kentux/MATLAB/R2015a/runtime/glnxa64/','-lmwmclmcrrt','-lboost_filesystem','-lboost_signals','-lboost_system','-lboost_thread','-lboost_date_time','-lboost_iostreams','-lboost_log'])
+    
+    lte_module_dependencies.append('matloss')
     module = bld.create_ns3_module('lte', lte_module_dependencies)
     module.source = [
         'model/lte-common.cc',
@@ -90,7 +95,6 @@ def build(bld):
         'model/cqa-ff-mac-scheduler.cc',
         'model/epc-gtpu-header.cc',
         'model/trace-fading-loss-model.cc',
-	'model/matlab-loss-model.cc',
         'model/epc-enb-application.cc',
         'model/epc-sgw-pgw-application.cc',
         'model/epc-x2-sap.cc',
@@ -265,7 +269,6 @@ def build(bld):
         'model/pss-ff-mac-scheduler.h',
         'model/cqa-ff-mac-scheduler.h',
         'model/trace-fading-loss-model.h',
-	'model/matlab-loss-model.h',
         'model/epc-gtpu-header.h',
         'model/epc-enb-application.h',
         'model/epc-sgw-pgw-application.h',
@@ -312,4 +315,4 @@ def build(bld):
     if (bld.env['ENABLE_EXAMPLES']):
       bld.recurse('examples')
 
-    bld.ns3_python_bindings()
+    #bld.ns3_python_bindings()
