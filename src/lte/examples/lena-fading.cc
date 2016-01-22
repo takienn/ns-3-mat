@@ -53,20 +53,20 @@ int main (int argc, char *argv[])
   //lteHelper->EnableLogComponents ();
   
 
-  lteHelper->SetAttribute ("FadingModel", StringValue ("ns3::TraceFadingLossModel"));
+  lteHelper->SetAttribute ("FadingModel", StringValue ("ns3::MatlabLossModel"));
   
-  std::ifstream ifTraceFile;
-  ifTraceFile.open ("../../src/lte/model/fading-traces/fading_trace_EPA_3kmph.fad", std::ifstream::in);
-  if (ifTraceFile.good ())
-    {
-      // script launched by test.py
-      lteHelper->SetFadingModelAttribute ("TraceFilename", StringValue ("../../src/lte/model/fading-traces/fading_trace_EPA_3kmph.fad"));
-    }
-  else
-    {
-      // script launched as an example
-      lteHelper->SetFadingModelAttribute ("TraceFilename", StringValue ("src/lte/model/fading-traces/fading_trace_EPA_3kmph.fad"));
-    }
+//  std::ifstream ifTraceFile;
+//  ifTraceFile.open ("../../src/lte/model/fading-traces/fading_trace_EPA_3kmph.fad", std::ifstream::in);
+//  if (ifTraceFile.good ())
+//    {
+//      // script launched by test.py
+//      lteHelper->SetFadingModelAttribute ("TraceFilename", StringValue ("../../src/lte/model/fading-traces/fading_trace_EPA_3kmph.fad"));
+//    }
+//  else
+//    {
+//      // script launched as an example
+//      lteHelper->SetFadingModelAttribute ("TraceFilename", StringValue ("src/lte/model/fading-traces/fading_trace_EPA_3kmph.fad"));
+//    }
     
   // these parameters have to setted only in case of the trace format 
   // differs from the standard one, that is
@@ -74,11 +74,11 @@ int main (int argc, char *argv[])
   // - 10,000 samples
   // - 0.5 seconds for window size
   // - 100 RB
-  lteHelper->SetFadingModelAttribute ("TraceLength", TimeValue (Seconds (10.0)));
-  lteHelper->SetFadingModelAttribute ("SamplesNum", UintegerValue (10000));
-  lteHelper->SetFadingModelAttribute ("WindowSize", TimeValue (Seconds (0.5)));
-  lteHelper->SetFadingModelAttribute ("RbNum", UintegerValue (100));
- 
+//  lteHelper->SetFadingModelAttribute ("TraceLength", TimeValue (Seconds (10.0)));
+//  lteHelper->SetFadingModelAttribute ("SamplesNum", UintegerValue (10000));
+//  lteHelper->SetFadingModelAttribute ("WindowSize", TimeValue (Seconds (0.5)));
+//  lteHelper->SetFadingModelAttribute ("RbNum", UintegerValue (100));
+//
   // Create Nodes: eNodeB and UE
   NodeContainer enbNodes;
   NodeContainer ueNodes;
