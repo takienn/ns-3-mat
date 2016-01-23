@@ -111,20 +111,23 @@ MatlabLossModel::DoInitialize ()
 	 * Call engOpen with a NULL string. This starts a MATLAB process
      * on the current host using the command "matlab".
 	 */
-	Engine *ep;
-	if (!(ep = engOpen(""))) {
+	if (!(m_ep = engOpen(""))) {
 		NS_LOG_ERROR("Can't start MATLAB engine");
 	}
-	m_ep = ep;
 	NS_ASSERT(m_ep);
 
-	engEvalString(m_ep, "c=3e8;fc = 1930e6;lambda = c/fc;v_km_h = 3.0;v_m_s = v_km_h / 3.6;fd = v_m_s / lambda;");
+	engEvalString(m_ep, "c=3e8;"
+						"fc = 1930e6;"
+						"lambda = c/fc;"
+						"v_km_h = 3.0;"
+						"v_m_s = v_km_h / 3.6;"
+						"fd = v_m_s / lambda;");
 	engEvalString(m_ep, "delays_pedestrianEPA = [0 30e-9 70e-9 90e-9 120e-9 190e-9 410e-9];");
 	engEvalString(m_ep, "power_pedestrianEPA = [0.0 -1.0 -2.0 -3.0 -8.0 -17.2 -20.8];");
-	engEvalString(m_ep, "fs=20e6;ts=1/fs;");
-	engEvalString(m_ep, "c = rayleighchan(ts, fd, delays_pedestrianEPA, power_pedestrianEPA);");
-	engEvalString(m_ep, "c.ResetBeforeFiltering = 0;c.NormalizePathGains = 1; TTI = 0.001;");
-	engEvalString(m_ep, "numSamples = TTI / ts;");
+//	engEvalString(m_ep, "fs=1.4e6 ;ts=1/fs;");
+//	engEvalString(m_ep, "c = rayleighchan(ts, fd, delays_pedestrianEPA, power_pedestrianEPA);");
+//	engEvalString(m_ep, "c.ResetBeforeFiltering = 0;c.NormalizePathGains = 1;");
+//	engEvalString(m_ep, " TTI = 0.001; numSamples = TTI / ts;");
 }
 
 
@@ -167,96 +170,65 @@ MatlabLossModel::DoCalcRxPowerSpectralDensity (
 {
   NS_LOG_FUNCTION (this << *txPsd << a << b);
   
-//  Engine* ep = (Engine*) m_ep;
 
-  int numSamples = txPsd->GetSpectrumModel()->GetNumBands();
-  mxArray* sig = mxCreateDoubleMatrix(numSamples, 1, mxREAL);
-  mxArray* y = mxCreateDoubleMatrix(numSamples, 1, mxREAL);
-  memcpy((void *)mxGetPr(sig), (void *)&txPsd[0], numSamples);
+  double numBands = (double)txPsd->GetSpectrumModel()->GetNumBands();
+  double FS = 1.4e6;
 
-  engPutVariable(m_ep, "sig", sig);
-  engPutVariable(m_ep, "y", y);
+  if(numBands ==  6)
+	  FS=1.4e6;
+  if(numBands ==  15)
+	  FS=3e6;
+  if(numBands ==  25)
+	  FS=5e6;
+  if(numBands ==  50)
+	  FS=10e6;
+  if(numBands ==  75)
+	  FS=15e6;
+  if(numBands == 100)
+	  FS=20e6;
+
+  Ptr<SpectrumValue> rxPsd = Copy<SpectrumValue>(txPsd);
+  mxArray* psdrx = mxCreateDoubleMatrix(1,numBands, mxREAL);
+  mxArray* numRBs = mxCreateDoubleScalar(numBands);
+  mxArray* fs = mxCreateDoubleScalar(FS);
+
+  engPutVariable(m_ep,"numRBs",numRBs);
+  engPutVariable(m_ep,"fs", fs);
+
+  engEvalString(m_ep,"ts = 1/fs;"
+		  	  	  	 "TTI = 0.001;"
+		  	  	  	 "numSamples = TTI / ts;");
+
+  engEvalString(m_ep,"c = rayleighchan(ts, fd, delays_pedestrianEPA, power_pedestrianEPA);"
+		  	  	  	 "c.ResetBeforeFiltering = 0;"
+		  	  	  	 "c.NormalizePathGains = 1");
+
+  engEvalString(m_ep,"sig = zeros(numSamples, 1);"
+		  	  	  	 "sig(1) = 1;"
+		  	  	  	 "[psdsig,F] = pwelch(sig,[],[],numRBs,fs,'twosided');");
 
   engEvalString(m_ep,"y = filter(c,sig);");
+  engEvalString(m_ep,"[psdy,F] = pwelch(y,[],[],numRBs,fs);"
+		  	  	  	 "psdy = psdy ./ psdsig;");
 
-  sig = engGetVariable(m_ep, "y");
-
-  Ptr<SpectrumValue> rxPsd = Copy<SpectrumValue> (txPsd);
-
-  memcpy((void *)&rxPsd[0],(void *)mxGetPr(sig), numSamples);
-//  std::map <ChannelRealizationId_t, int >::iterator itOff;
-//  ChannelRealizationId_t mobilityPair = std::make_pair (a,b);
-//  itOff = m_windowOffsetsMap.find (mobilityPair);
-//  if (itOff!=m_windowOffsetsMap.end ())
-//    {
-//      if (Simulator::Now ().GetSeconds () >= m_lastWindowUpdate.GetSeconds () + m_windowSize.GetSeconds ())
-//        {
-//          // update all the offsets
-//          NS_LOG_INFO ("Fading Windows Updated");
-//          std::map <ChannelRealizationId_t, int >::iterator itOff2;
-//          for (itOff2 = m_windowOffsetsMap.begin (); itOff2 != m_windowOffsetsMap.end (); itOff2++)
-//            {
-//              std::map <ChannelRealizationId_t, Ptr<UniformRandomVariable> >::iterator itVar;
-//              itVar = m_startVariableMap.find ((*itOff2).first);
-//              (*itOff2).second = (*itVar).second->GetValue ();
-//            }
-//          m_lastWindowUpdate = Simulator::Now ();
-//        }
-//    }
-//  else
-//    {
-//      NS_LOG_LOGIC (this << "insert new channel realization, m_windowOffsetMap.size () = " << m_windowOffsetsMap.size ());
-//      Ptr<UniformRandomVariable> startV = CreateObject<UniformRandomVariable> ();
-//      startV->SetAttribute ("Min", DoubleValue (1.0));
-//      startV->SetAttribute ("Max", DoubleValue ((m_traceLength.GetSeconds () - m_windowSize.GetSeconds ()) * 1000.0));
-//      if (m_streamsAssigned)
-//        {
-//          NS_ASSERT_MSG (m_currentStream <= m_lastStream, "not enough streams, consider increasing the StreamSetSize attribute");
-//          startV->SetStream (m_currentStream);
-//          m_currentStream += 1;
-//        }
-//      ChannelRealizationId_t mobilityPair = std::make_pair (a,b);
-//      m_startVariableMap.insert (std::pair<ChannelRealizationId_t,Ptr<UniformRandomVariable> > (mobilityPair, startV));
-//      m_windowOffsetsMap.insert (std::pair<ChannelRealizationId_t,int> (mobilityPair, startV->GetValue ()));
-//    }
-//
-//
+  psdrx = engGetVariable(m_ep, "psdy");
+  double* fadingValues = (double *)mxGetData(psdrx);
 
   Values::iterator vit = rxPsd->ValuesBegin ();
-  
-  //Vector aSpeedVector = a->GetVelocity ();
-  //Vector bSpeedVector = b->GetVelocity ();
-  
-  //double speed = std::sqrt (std::pow (aSpeedVector.x-bSpeedVector.x,2) + std::pow (aSpeedVector.y-bSpeedVector.y,2));
+//  Values::iterator fit = fadingValues->ValuesBegin();
+  while (vit != rxPsd->ValuesEnd ())
+  {
+	  if(*vit == 0) continue;
 
-  NS_LOG_LOGIC (this << *rxPsd);
-//  NS_ASSERT (!m_fadingTrace.empty ());
-//  int now_ms = static_cast<int> (Simulator::Now ().GetMilliSeconds () * m_timeGranularity);
-//  int lastUpdate_ms = static_cast<int> (m_lastWindowUpdate.GetMilliSeconds () * m_timeGranularity);
-//  int index = ((*itOff).second + now_ms - lastUpdate_ms) % m_samplesNum;
-//  int subChannel = 0;
-//  while (vit != rxPsd->ValuesEnd ())
-//    {
-//      NS_ASSERT (subChannel < 100);
-//      if (*vit != 0.)
-//        {
-//          double fading = m_fadingTrace.at (subChannel).at (index);
-//          NS_LOG_INFO (this << " FADING now " << now_ms << " offset " << (*itOff).second << " id " << index << " fading " << fading);
-//          double power = *vit; // in Watt/Hz
-//          power = 10 * std::log10 (180000 * power); // in dB
-//
-//          NS_LOG_LOGIC (this << subChannel << *vit  << power << fading);
-//
-//          *vit = std::pow (10., ((power + fading) / 10)) / 180000; // in Watt
-//
-//          NS_LOG_LOGIC (this << subChannel << *vit);
-//
-//        }
-//
-//      ++vit;
-//      ++subChannel;
-//
-//    }
+	  double power = *vit;
+	  power = 10 * std::log10 (180000 * power); // in dB
+	  double fading = *fadingValues;
+	  fading = 10 * std::log10 (fading); // in dB
+	  *vit = std::pow (10., ((power + fading) / 10)) / 180000; // in Watt
+
+	  ++vit;
+	  ++fadingValues;
+  }
 
   NS_LOG_LOGIC (this << *rxPsd);
   return rxPsd;
