@@ -1,4 +1,6 @@
 ## -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
+import os
+
 def build(bld):
 
     lte_module_dependencies = ['core', 'network', 'spectrum', 'stats', 'buildings', 'virtual-net-device','point-to-point','applications','internet','csma']
@@ -6,13 +8,14 @@ def build(bld):
         lte_module_dependencies.append('fd-net-device')
 
     mat_module = bld.create_ns3_module('matloss',['core','spectrum'])
+    MATLABROOT=os.getenv("MATLABROOT")
     mat_module.source = ['model/matlab-loss-model.cc']
     mat_headers = bld(features='ns3header')
     mat_headers.module='matloss'
     mat_headers.source = ['model/matlab-loss-model.h']
-    mat_module.env.append_value('CXXFLAGS', ["-I/home/kentux/MATLAB/R2015a/extern/include","-I/home/kentux/MATLAB/R2015a/simulink/include",'-ansi','-fexceptions','-fPIC','-fno-omit-frame-pointer','-pthread','-std=c++11'])
-    mat_module.env.append_value('LINKFLAGS', ['-L/home/kentux/MATLAB/R2015a/bin/glnxa64','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat'])  
-# mat_module.env.append_value('LINKFLAGS', ['-L/home/kentux/MATLAB/R2015a/bin/glnxa64','-Wl,-rpath,/home/kentux/MATLAB/R2015a/bin/glnxa64','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat','-L/home/kentux/MATLAB/R2015a/runtime/glnxa64/','-lmwmclmcrrt','-lboost_filesystem','-lboost_signals','-lboost_system','-lboost_thread','-lboost_date_time','-lboost_iostreams','-lboost_log'])
+    mat_module.env.append_value('CXXFLAGS', ["-I"+str(MATLABROOT)+"/extern/include","-I"+str(MATLABROOT)+"/simulink/include",'-ansi','-fexceptions','-fPIC','-fno-omit-frame-pointer','-pthread','-std=c++11'])
+    mat_module.env.append_value('LINKFLAGS', ['-L'+str(MATLABROOT)+'/bin/glnxa64','-Wl,--no-as-needed,--no-undefined','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat'])  
+# mat_module.env.append_value('LINKFLAGS', ['-LMATLABROOT/bin/glnxa64','-Wl,-rpath,MATLABROOT/bin/glnxa64','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat','-LMATLABROOT/runtime/glnxa64/','-lmwmclmcrrt','-lboost_filesystem','-lboost_signals','-lboost_system','-lboost_thread','-lboost_date_time','-lboost_iostreams','-lboost_log'])
     
     lte_module_dependencies.append('matloss')
     module = bld.create_ns3_module('lte', lte_module_dependencies)
