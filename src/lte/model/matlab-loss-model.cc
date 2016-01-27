@@ -172,26 +172,30 @@ MatlabLossModel::DoCalcRxPowerSpectralDensity (
   
 
   double numBands = (double)txPsd->GetSpectrumModel()->GetNumBands();
-  double FS = 1.4e6;
+  double FS = 1.92e6;
 
   if(numBands ==  6)
-	  FS=1.4e6;
+	  FS=1.92e6;
   if(numBands ==  15)
-	  FS=3e6;
+	  FS=3.84e6;
   if(numBands ==  25)
-	  FS=5e6;
+	  FS=7.68e6;
   if(numBands ==  50)
-	  FS=10e6;
+	  FS=15.36e6;
   if(numBands ==  75)
-	  FS=15e6;
+	  FS=23.04e6;
   if(numBands == 100)
-	  FS=20e6;
+	  FS=30.72e6;
 
   Ptr<SpectrumValue> rxPsd = Copy<SpectrumValue>(txPsd);
   mxArray* psdrx = mxCreateDoubleMatrix(1,numBands, mxREAL);
   mxArray* numRBs = mxCreateDoubleScalar(numBands);
   mxArray* fs = mxCreateDoubleScalar(FS);
 
+  /*
+   * The LTE model generates a spectrum model with NumBands that corresponds to the number of resource
+   * blocks used for that specific transmission (bandwidth)
+   */
   engPutVariable(m_ep,"numRBs",numRBs);
   engPutVariable(m_ep,"fs", fs);
 
