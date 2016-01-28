@@ -39,11 +39,12 @@ pdcchInfo = ltePDCCHInfo(enb);
 ue = {};
 ue.PDCCHFormat = 1;  % 0, 1, 2, 3
 ue.DCIFormat = 'Format1';
-ue.RNTI = 0; % take from ns-3
+ue.RNTI = 10; % take from ns-3
 ue.NDLRB = 25;
 ue.NULRB = 25;
 dciInfo = lteDCIInfo(enb);
 dcibits = zeros(dciInfo.Format1,1);
+dcibits(1:2) = [1; 1];
 cw = lteDCIEncode(ue,dcibits);
 [pdcchSym,info] = ltePDCCH(enb,cw);
 ind5 = ltePDCCHIndices(enb);
@@ -62,6 +63,7 @@ enb.PDSCH.NLayers = 1;
 [ind6,info] = ltePDSCHIndices(enb,enb.PDSCH,enb.PDSCH.PRBSet);
 trBlk  = randi([0,1],info.Gd,1);
 cw = lteDLSCH(enb,enb.PDSCH,info.G,trBlk);
+%cw(cw == 0) = -1;
 pdschSym = ltePDSCH(enb,enb.PDSCH,cw);
 
 
@@ -137,10 +139,8 @@ chcfg.NormalizeTxAnts = 'On';
 chcfg.NormalizePathGains = 'On';
 chcfg.InitTime = 0;
 
-% y = lteFadingChannel(chcfg,waveform);
-y = waveform + 0.001*rand(size(waveform));
-
-
+y = lteFadingChannel(chcfg,waveform);
+% y = waveform + 0.001*rand(size(waveform));
 
 % decoder
 cec.FreqWindow = 1;
@@ -154,15 +154,15 @@ rxgrid = lteOFDMDemodulate(enb, y);
 [hest,noisest] = lteDLChannelEstimate(enb, cec, rxgrid);
 
 rxpbchSym = rxgrid(ind4);
-[pbchbits,~,nfmod4,mib_decoded,cellrefp] = ltePBCHDecode(enb, rxpbchSym, hest, noisest);
+[pbchbits,~,nfmod4,mib_decoded,cellrefp] = ltePBCHDecode(enb, [rxpbchSym; rxpbchSym; rxpbchSym; rxpbchSym], hest, noisest);
 
 rxpdcchSym = rxgrid(ind5);
 [pdcchbits,~] = ltePDCCHDecode(enb,rxpdcchSym,hest(ind5),noisest);
-[dcibits,crc_rnti] = lteDCIDecode(ue,pdcchbits);
+[decodeddcibits,crc_rnti] = lteDCIDecode(ue,pdcchbits);
 
 rxpdschSym = rxgrid(ind6);
 [pdschbits,~] = ltePDSCHDecode(enb,enb.PDSCH,rxgrid,hest,noisest);
-
+[trblkout,blkcrc,stateout] = lteDLSCHDecode(enb,enb.PDSCH,info.Gd,pdschbits{1, 1},[]);
 
 
 
