@@ -24,6 +24,7 @@
 
 
 #include <ns3/spectrum-signal-parameters.h>
+#include <list>
 
 namespace ns3 {
 
@@ -90,6 +91,9 @@ struct LteSpectrumSignalParametersDataFrame : public SpectrumSignalParameters
   std::list<Ptr<LteControlMessage> > ctrlMsgList;
   
   uint16_t cellId;
+
+  uint32_t frameN;	//Frame Number
+  uint32_t subframeN;	//Subframe Number
 };
 
 
@@ -119,6 +123,8 @@ struct LteSpectrumSignalParametersDlCtrlFrame : public SpectrumSignalParameters
   
   uint16_t cellId;
   bool pss; // primary synchronization signal
+  uint32_t frameN;	//Frame Number
+  uint32_t subframeN;	//Subframe Number
 };
 
 

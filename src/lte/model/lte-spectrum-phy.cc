@@ -425,6 +425,7 @@ LteSpectrumPhy::StartTxDataFrame (Ptr<PacketBurst> pb, std::list<Ptr<LteControlM
   NS_LOG_FUNCTION (this << pb);
   NS_LOG_LOGIC (this << " state: " << m_state);
   
+  DisplayCtrlMsgList(ctrlMsgList);
   m_phyTxStartTrace (pb);
   
   switch (m_state)
@@ -478,12 +479,62 @@ LteSpectrumPhy::StartTxDataFrame (Ptr<PacketBurst> pb, std::list<Ptr<LteControlM
   }
 }
 
+void LteSpectrumPhy::DisplayCtrlMsgList(std::list<Ptr<LteControlMessage> > ctrlMsgList)
+{
+  Ptr<LteControlMessage> msg;
+  std::cout << "crtlMsgList size = " << ctrlMsgList.size() << "\n";
+  std::list<Ptr<LteControlMessage> >::iterator it = ctrlMsgList.begin();
+  for (; it != ctrlMsgList.end(); ++it)
+    {
+      msg = *it;
+      std::string msgTypeStr = "";
+      LteControlMessage::MessageType msgType = msg->GetMessageType();
+      switch(msgType)
+      {
+	case LteControlMessage::BSR:
+	  msgTypeStr.append("BSR");
+	  break;
+	case LteControlMessage::DL_CQI:
+	  msgTypeStr.append("DL_CQI");
+	  break;
+	case LteControlMessage::DL_DCI:
+	  msgTypeStr.append("DL_DCI");
+	  break;
+	case LteControlMessage::DL_HARQ:
+	  msgTypeStr.append("DL_HARQ");
+	  break;
+	case LteControlMessage::MIB:
+	  msgTypeStr.append("MIB");
+	  break;
+	case LteControlMessage::RACH_PREAMBLE:
+	  msgTypeStr.append("RACH_PREAMBLE");
+	  break;
+	case LteControlMessage::RAR:
+	  msgTypeStr.append("RAR");
+	  break;
+	case LteControlMessage::SIB1:
+	  msgTypeStr.append("SIB1");
+	  break;
+	case LteControlMessage::UL_CQI:
+	  msgTypeStr.append("UL_CQI");
+	  break;
+	case LteControlMessage::UL_DCI:
+	  msgTypeStr.append("UL_DCI");
+	  break;
+
+
+      }
+      std::cout << "msg type: " << msgTypeStr << "\n";
+      msgTypeStr.clear();
+    }
+}
 bool
 LteSpectrumPhy::StartTxDlCtrlFrame (std::list<Ptr<LteControlMessage> > ctrlMsgList, bool pss)
 {
   NS_LOG_FUNCTION (this << " PSS " << (uint16_t)pss);
   NS_LOG_LOGIC (this << " state: " << m_state);
   
+  DisplayCtrlMsgList(ctrlMsgList);
   switch (m_state)
   {
     case RX_DATA:

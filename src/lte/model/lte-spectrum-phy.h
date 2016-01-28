@@ -430,6 +430,7 @@ private:
   
   void SetTxModeGain (uint8_t txMode, double gain);
   
+  void DisplayCtrlMsgList(std::list<Ptr<LteControlMessage> > ctrlMsgList);
 
   Ptr<MobilityModel> m_mobility;
   Ptr<AntennaModel> m_antenna;

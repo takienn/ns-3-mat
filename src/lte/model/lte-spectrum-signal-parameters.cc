@@ -73,6 +73,9 @@ LteSpectrumSignalParametersDataFrame::LteSpectrumSignalParametersDataFrame (cons
       packetBurst = p.packetBurst->Copy ();
     }
   ctrlMsgList = p.ctrlMsgList;
+
+  frameN = p.frameN;
+  subframeN=p.subframeN;
 }
 
 Ptr<SpectrumSignalParameters>
@@ -103,6 +106,8 @@ LteSpectrumSignalParametersDlCtrlFrame::LteSpectrumSignalParametersDlCtrlFrame (
   cellId = p.cellId;
   pss = p.pss;
   ctrlMsgList = p.ctrlMsgList;
+  frameN = p.frameN;
+  subframeN = p.subframeN;
 }
 
 Ptr<SpectrumSignalParameters>
