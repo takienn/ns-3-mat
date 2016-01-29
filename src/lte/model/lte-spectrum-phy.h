@@ -41,6 +41,7 @@
 #include <ns3/ff-mac-common.h>
 #include <ns3/lte-harq-phy.h>
 #include <ns3/lte-common.h>
+#include <ns3/traced-value.h>
 
 namespace ns3 {
 

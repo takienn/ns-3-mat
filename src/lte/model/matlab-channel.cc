@@ -8,6 +8,8 @@
 #include <ns3/mobility-model.h>
 #include <ns3/net-device.h>
 #include <ns3/assert.h>
+#include <ns3/node.h>
+
 #include <list>
 #include "matlab-channel.h"
 
@@ -17,12 +19,15 @@ NS_LOG_COMPONENT_DEFINE ("MatlabChannel");
 
 NS_OBJECT_ENSURE_REGISTERED (MatlabChannel);
 
+Engine* MatlabChannel::m_ep = NULL;
+
 TypeId
 MatlabChannel::GetTypeId()
 {
   static TypeId tid = TypeId("ns3::MatlabChannel")
     .SetParent<SpectrumChannel> ()
-    .SetGroupName("lte");
+    .SetGroupName("lte")
+    .AddConstructor<MatlabChannel> ();
 
   return tid;
 }
@@ -33,16 +38,20 @@ MatlabChannel::~MatlabChannel ()
 
 MatlabChannel::MatlabChannel()
 {
-  m_ep = engOpen("");
-  NS_ASSERT(m_ep);
-  engEvalString(m_ep, "ENB.NDLRB = 25;"
-      "ENB.CellRefP = 1"
-      "ENB.NCellID = 0"
-      "ENB.CyclicPrefix = 'Normal';"
-      "ENB.PHICHDuration = 'Normal';"
-      "ENB.DuplexMode = 'FDD';"
-      "ENB.CFI = 3;"
-      "ENB.Ng = 'Sixth';");
+  if(!m_ep)
+    {
+      m_ep = engOpen("");
+      NS_ASSERT(m_ep);
+      engEvalString(m_ep, "ENB.NDLRB = 25;\n"
+	"ENB.CellRefP = 1;\n"
+	"ENB.NCellID = 0;\n"
+	"ENB.CyclicPrefix = 'Normal';\n"
+	"ENB.PHICHDuration = 'Normal';\n"
+	"ENB.DuplexMode = 'FDD';\n"
+	"ENB.CFI = 3;\n"
+	"ENB.Ng = 'Sixth';\n");
+    }
+
 
 }
 void
@@ -75,22 +84,34 @@ MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
     Ptr<LteSpectrumSignalParametersDataFrame> lteDataRxParams = DynamicCast<LteSpectrumSignalParametersDataFrame> (txParams);
     Ptr<LteSpectrumSignalParametersDlCtrlFrame> lteDlCtrlRxParams = DynamicCast<LteSpectrumSignalParametersDlCtrlFrame> (txParams);
     Ptr<LteSpectrumSignalParametersUlSrsFrame> lteUlSrsRxParams = DynamicCast<LteSpectrumSignalParametersUlSrsFrame> (txParams);
+    Ptr<LteEnbNetDevice> enbDev = DynamicCast<LteEnbNetDevice>(txParams->txPhy->GetDevice());
+    Ptr<LteUeNetDevice> ueDev = DynamicCast<LteUeNetDevice>(txParams->txPhy->GetDevice());
+
+    NS_LOG_LOGIC (" copying signal parameters " << txParams);
+    Ptr<SpectrumSignalParameters> rxParams;
+
+    bool isEnb;
+    if(ueDev)
+      isEnb = 0;
+    else if (enbDev)
+      isEnb = 1;
+    else
+      NS_FATAL_ERROR("Unknown Lte Device");
+
     if (lteDlCtrlRxParams != 0)
       {
-
-	Ptr<LteEnbNetDevice> dev = DynamicCast<LteEnbNetDevice>(txParams->txPhy->GetDevice());
-	if(dev)
+	if(isEnb)
 	  {
-	    uint8_t dlBw = dev->GetDlBandwidth();
+	    uint8_t dlBw = enbDev->GetDlBandwidth();
 
-	    double dl_fc = LteSpectrumValueHelper::GetCarrierFrequency(dev->GetDlEarfcn());
-	    double ul_fc = LteSpectrumValueHelper::GetCarrierFrequency(dev->GetUlEarfcn());
+	    double dl_fc = LteSpectrumValueHelper::GetCarrierFrequency(enbDev->GetDlEarfcn());
+	    double ul_fc = LteSpectrumValueHelper::GetCarrierFrequency(enbDev->GetUlEarfcn());
 	    engPutVariable(m_ep,"NFrame", mxCreateDoubleScalar(lteDlCtrlRxParams->frameN));
 	    engPutVariable(m_ep,"NSubframe", mxCreateDoubleScalar(lteDlCtrlRxParams->subframeN));
 	    engPutVariable(m_ep,"DL_FC", mxCreateDoubleScalar(dl_fc));
 	    engPutVariable(m_ep,"UL_FC", mxCreateDoubleScalar(ul_fc));
 	    engPutVariable(m_ep,"dlBw", mxCreateDoubleScalar((double)dlBw));
-	    engEvalString(m_ep, "ENB.NDLRB = dlBw"
+	    engEvalString(m_ep, "ENB.NDLRB = dlBw;"
 				"ENB.NFrame = NFrame;"
 				"ENB.NSubframe = NSubframe;"
 				"subframe = lteDLResourceGrid(ENB)");
@@ -111,19 +132,67 @@ MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
 	    engPutVariable(m_ep,"FS", mxCreateDoubleScalar(FS));
 
 	  }
+	else
+	  {
+
+	  }
 
 	//Generate Data Frame in MATLAB
-	SerializeDataParams (lteDataRxParams);
-      }
-    else if (lteDlCtrlRxParams!=0)
-      {
-	//Generate Ctrl Frame in MATLAB
 	SerializeCtrlParams (lteDlCtrlRxParams);
+	PassThroughChannel ();
+	rxParams = DeserializeCtlrParams(lteDlCtrlRxParams);
+      }
+    else if (lteDataRxParams!=0)
+      {
+	if(isEnb)
+	  {
+	    uint8_t dlBw = enbDev->GetDlBandwidth();
+
+	    double dl_fc = LteSpectrumValueHelper::GetCarrierFrequency(enbDev->GetDlEarfcn());
+	    double ul_fc = LteSpectrumValueHelper::GetCarrierFrequency(enbDev->GetUlEarfcn());
+	    engPutVariable(m_ep,"NFrame", mxCreateDoubleScalar(lteDlCtrlRxParams->frameN));
+	    engPutVariable(m_ep,"NSubframe", mxCreateDoubleScalar(lteDlCtrlRxParams->subframeN));
+	    engPutVariable(m_ep,"DL_FC", mxCreateDoubleScalar(dl_fc));
+	    engPutVariable(m_ep,"UL_FC", mxCreateDoubleScalar(ul_fc));
+	    engPutVariable(m_ep,"dlBw", mxCreateDoubleScalar((double)dlBw));
+	    engEvalString(m_ep, "ENB.NDLRB = dlBw;"
+				"ENB.NFrame = NFrame;"
+				"ENB.NSubframe = NSubframe;"
+				"subframe = lteDLResourceGrid(ENB);");
+
+	    double FS = 1.92e6;
+
+	    if(dlBw ==  6)
+	            FS=1.92e6;
+	    if(dlBw ==  15)
+	            FS=3.84e6;
+	    if(dlBw ==  25)
+	            FS=7.68e6;
+	    if(dlBw ==  50)
+	            FS=15.36e6;
+	    if(dlBw ==  75)
+	            FS=23.04e6;
+	    if(dlBw == 100)
+	            FS=30.72e6;
+	    engPutVariable(m_ep,"FS", mxCreateDoubleScalar(FS));
+
+	  }
+	else
+	  {
+
+	  }
+
+	//Generate Ctrl Frame in MATLAB
+	SerializeDataParams (lteDataRxParams);
+	PassThroughChannel ();
+	rxParams = DeserializeDataParams(lteDataRxParams);
       }
     else if (lteUlSrsRxParams!=0)
       {
 	//Generate UL SRS in Matlab
 	SerializeSrsParams (lteUlSrsRxParams);
+	PassThroughChannel ();
+	rxParams = DeserializeUlSrsParams(lteUlSrsRxParams);
       }
     else
       {
@@ -131,6 +200,58 @@ MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
       }
 
 
+    for (RxSpectrumModelInfoMap_t::const_iterator rxInfoIterator = m_rxSpectrumModelInfoMap.begin ();
+         rxInfoIterator != m_rxSpectrumModelInfoMap.end ();
+         ++rxInfoIterator)
+      {
+        SpectrumModelUid_t rxSpectrumModelUid = rxInfoIterator->second.m_rxSpectrumModel->GetUid ();
+        NS_LOG_LOGIC (" rxSpectrumModelUids " << rxSpectrumModelUid);
+
+        Ptr <SpectrumValue> convertedTxPowerSpectrum;
+        if (txSpectrumModelUid == rxSpectrumModelUid)
+          {
+            NS_LOG_LOGIC ("no spectrum conversion needed");
+            convertedTxPowerSpectrum = txParams->psd;
+          }
+        else
+          {
+            NS_LOG_LOGIC (" converting txPowerSpectrum SpectrumModelUids" << txSpectrumModelUid << " --> " << rxSpectrumModelUid);
+            SpectrumConverterMap_t::const_iterator rxConverterIterator = txInfoIteratorerator->second.m_spectrumConverterMap.find (rxSpectrumModelUid);
+            NS_ASSERT (rxConverterIterator != txInfoIteratorerator->second.m_spectrumConverterMap.end ());
+            convertedTxPowerSpectrum = rxConverterIterator->second.Convert (txParams->psd);
+          }
+
+
+        for (std::set<Ptr<SpectrumPhy> >::const_iterator rxPhyIterator = rxInfoIterator->second.m_rxPhySet.begin ();
+             rxPhyIterator != rxInfoIterator->second.m_rxPhySet.end ();
+             ++rxPhyIterator)
+          {
+            NS_ASSERT_MSG ((*rxPhyIterator)->GetRxSpectrumModel ()->GetUid () == rxSpectrumModelUid,
+                           "SpectrumModel change was not notified to MultiModelSpectrumChannel (i.e., AddRx should be called again after model is changed)");
+
+            if ((*rxPhyIterator) != txParams->txPhy)
+              {
+                rxParams->psd = Copy<SpectrumValue> (convertedTxPowerSpectrum);
+                Time delay = MicroSeconds (0);
+
+                Ptr<NetDevice> netDev = (*rxPhyIterator)->GetDevice ();
+                if (netDev)
+                  {
+                    // the receiver has a NetDevice, so we expect that it is attached to a Node
+                    uint32_t dstNode =  netDev->GetNode ()->GetId ();
+                    Simulator::ScheduleWithContext (dstNode, delay, &MatlabChannel::StartRx, this,
+                                                    rxParams, *rxPhyIterator);
+                  }
+                else
+                  {
+                    // the receiver is not attached to a NetDevice, so we cannot assume that it is attached to a node
+                    Simulator::Schedule (delay, &MatlabChannel::StartRx, this,
+                                         rxParams, *rxPhyIterator);
+                  }
+              }
+          }
+
+      }
 }
 
 void
@@ -157,19 +278,19 @@ MatlabChannel::SerializeCtrlParams (Ptr<LteSpectrumSignalParametersDlCtrlFrame> 
 
   NS_ASSERT(m_ep);
 
-  NS_ASSERT(m_ep);
-
   engPutVariable(m_ep, "CELLID", mxCreateDoubleScalar((double) cellId));
-  engEvalString(m_ep,"ENB.NCellID = CELLID;");
-
+  engEvalString(m_ep,"ENB.NCellID = CELLID;\n");
+  engEvalString(m_ep, "rs = lteCellRS(ENB);\n"
+		      "rsIndices = lteCellRSIndices(ENB);\n"
+		      "subframe(rsIndices) = rs;\n");
   if(pss)
     {
-      engEvalString(m_ep, "pss = ltePSS(ENB);"
-	  "pssIndices = ltePSSIndices(ENB);"
-	  "subframe[pssIndices] = pss;"
-	  "sss = lteSSS(ENB);"
-	  "sssIndices = lteSSSIndices(ENB);"
-	  "subframe[sssIndices] = sss;");
+      engEvalString(m_ep, "pss = ltePSS(ENB);\n"
+	  "pssIndices = ltePSSIndices(ENB);\n"
+	  "subframe(pssIndices) = pss;\n"
+	  "sss = lteSSS(ENB);\n"
+	  "sssIndices = lteSSSIndices(ENB);\n"
+	  "subframe(sssIndices) = sss;\n");
     }
 
   SerializeCtlrMessages(ctrlMsgList);
@@ -211,18 +332,22 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 	      mibMsg = StaticCast<MibLteControlMessage> (msg);
 	      LteRrcSap::MasterInformationBlock mib = mibMsg->GetMib ();
 
-	      mxArray* NDLRB = mxCreateDoubleScalar (mib.dlBandwidth);
-	      mxArray* NFrame = mxCreateDoubleScalar (mib.systemFrameNumber);
-	      engPutVariable (m_ep, "NLRB", NDLRB);
+	      double ndlrb = (double)mib.dlBandwidth;
+	      double nframe = (double)mib.systemFrameNumber;
+	      mxArray* NDLRB = mxCreateDoubleScalar (ndlrb);
+	      mxArray* NFrame = mxCreateDoubleScalar (nframe);
+	      engPutVariable (m_ep, "NDLRB", NDLRB);
 	      engPutVariable (m_ep, "NFrame", NFrame);
-	      engEvalString (m_ep, "enb = ENB; "
-				   "enb.NDLRB = NDLRB; "
-				   "enb.NFrame = NFrame;"
-				   "mib = lteMib(enb);"
-				   "bch = lteBCH(ENB, mib);"
-				   "pbchSymbols = ltePBCH(ENB, bch);"
-				   "pbchIndices = ltePBCHIndices(ENB)"
-				   "subframe(pbchIndices) = pbchSymbols");
+	      engEvalString (m_ep, "enb = ENB; \n");
+	      engEvalString (m_ep, "enb.NDLRB = NDLRB; \n");
+	      engEvalString (m_ep, "enb.NFrame = NFrame;\n");
+	      engEvalString (m_ep, "fprintf('%d',enb.NDLRB)\n");
+	      engEvalString (m_ep, "fprintf('%d',ENB.NDLRB)\n");
+	      engEvalString (m_ep, "mib = lteMIB(enb);\n");
+	      engEvalString (m_ep, "bch = lteBCH(ENB, mib);\n");
+	      engEvalString (m_ep, "pbchSymbols = ltePBCH(enb, bch);\n");
+	      engEvalString (m_ep, "pbchIndices = ltePBCHIndices(enb);\n");
+	      engEvalString (m_ep, "subframe(pbchIndices) = pbchSymbols(1:length(pbchIndices));\n");
 	    }
 
 	  break;
@@ -235,7 +360,10 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 	case LteControlMessage::SIB1:
 //	  Sib1LteControlMessage sibMsg = StaticCast<Sib1LteControlMessage>(msg);
 //	  LteRrcSap::SystemInformationBlockType1 sib1 = sibMsg.GetSib1();
-//	  sib1.cellAccessRelatedInfo.plmnIdentityInfo;
+//	  sib1.cellAccessRelatedInfo.plmnIdentityInfo.plmnIdentity.;
+	  RrcAsn1Header asn1Header;
+	  Buffer::Iterator it;
+	  asn1Header.Serialize(it);
 
 	  break;
 	case LteControlMessage::UL_CQI:
@@ -249,29 +377,34 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
       }
     }
 
-  engEvalString(m_ep, "txWaveform = lteOFDMModulate(ENB,subframe);");
+  engEvalString(m_ep, "txWaveform = lteOFDMModulate(ENB,subframe);\n");
 
-  engEvalString(m_ep,"chcfg.DelayProfile = 'EPA';"
-		     "chcfg.NRxAnts = 1;"
-		     "chcfg.DopplerFreq = 5;"
-		     "chcfg.MIMOCorrelation = 'Low';"
-		     "chcfg.SamplingRate = FS;"
-		     "chcfg.Seed = 1;"
-		     "chcfg.InitPhase = 'Random';"
-		     "chcfg.ModelType = 'GMEDS';"
-		     "chcfg.NTerms = 16;"
-		     "chcfg.NormalizeTxAnts = 'On';"
-		     "chcfg.NormalizePathGains = 'On';"
-		     "chcfg.InitTime = (ENB.NFrame * 10 + ENB.NSubframe) * 10e-3;"
-		     "rxWaveform = lteFadingChannel(chcfg,txWaveform);");
+}
+
+void
+MatlabChannel::PassThroughChannel()
+{
+  engEvalString(m_ep,"chcfg.DelayProfile = 'EPA';\n"
+		     "chcfg.NRxAnts = 1;\n"
+		     "chcfg.DopplerFreq = 5;\n"
+		     "chcfg.MIMOCorrelation = 'Low';\n"
+		     "chcfg.SamplingRate = FS;\n"
+		     "chcfg.Seed = 1;\n"
+		     "chcfg.InitPhase = 'Random';\n"
+		     "chcfg.ModelType = 'GMEDS';\n"
+		     "chcfg.NTerms = 16;\n"
+		     "chcfg.NormalizeTxAnts = 'On';\n"
+		     "chcfg.NormalizePathGains = 'On';\n"
+		     "chcfg.InitTime = (ENB.NFrame * 10 + ENB.NSubframe) * 10e-3;\n"
+		     "rxWaveform = lteFadingChannel(chcfg,txWaveform);\n");
 
   engEvalString(m_ep,""
-		    "cec.PilotAverage = 'UserDefined';     % Type of pilot averaging"
-		    "cec.FreqWindow = 9;                   % Frequency window size"
-		    "cec.TimeWindow = 9;                   % Time window size"
-		    "cec.InterpType = 'cubic';             % 2D interpolation type"
-		    "cec.InterpWindow = 'Centered';        % Interpolation window type"
-		    "cec.InterpWinSize = 1;                % Interpolation window size");
+		    "cec.PilotAverage = 'UserDefined';     % Type of pilot averaging\n"
+		    "cec.FreqWindow = 9;                   % Frequency window size\n"
+		    "cec.TimeWindow = 9;                   % Time window size\n"
+		    "cec.InterpType = 'cubic';             % 2D interpolation type\n"
+		    "cec.InterpWindow = 'Centered';        % Interpolation window type\n"
+		    "cec.InterpWinSize = 1;                % Interpolation window size\n");
 //  engEvalString(m_ep,"if (~isfield(ENB,'DuplexMode'))"
 //		      "    duplexModes = {'TDD' 'FDD'};"
 //		      "else"
@@ -313,27 +446,75 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 //		      "% return to originally detected cell identity"
 //		      "enb.NCellID = enbMax.NCellID;"
 //		      ""
-  engEvalString(m_ep, "griddims = lteResourceGridSize(ENB);"
-		      "L = griddims(2);"
-		      "enb = ENB;"
-		      "rxgrid = lteOFDMDemodulate(ENB, rxWaveform);"
-		      "[hest, nest] = lteDLChannelEstimate(ENB, cec, rxgrid(:,1:L,:));"
-		      "pbchIndices = ltePBCHIndices(enb);"
-		      "[pbchRx, pbchHest] = lteExtractResources( ..."
-		      "		pbchIndices, rxgrid(:,1:L,:), hest(:,1:L,:,:));"
+
+  engEvalString(m_ep, "griddims = lteResourceGridSize(ENB);\n"
+		      "L = griddims(2);\n"
+		      "rxgrid = lteOFDMDemodulate(ENB, rxWaveform);\n"
+		      "[hest, nest] = lteDLChannelEstimate(ENB, cec, rxgrid(:,1:L,:));\n"
+		      "pbchIndices = ltePBCHIndices(ENB);\n"
+		      "[pbchRx, pbchHest] = lteExtractResources( ...\n"
+		      "		pbchIndices, rxgrid(:,1:L,:), hest(:,1:L,:,:));\n"
 		      ""
-		      "[bchBits, pbchSymbols, nfmod4, mib, enb.CellRefP] = ltePBCHDecode( ..."
-		      "		ENB, pbchRx, pbchHest, nest);"
-		      "enb = lteMIB(mib, enb);"
-		      "enb.NFrame = enb.NFrame+nfmod4;"
-		      "if (enb.CellRefP==0)"
-		      "	fprintf('MIB decoding failed (enb.CellRefP=0).\n\n');"
-		      "	return;"
-		      "end"
-		      "if (enb.NDLRB==0)"
-		      "	fprintf('MIB decoding failed (enb.NDLRB=0).\n\n');"
-		      "	return;"
-		      "end");
+		      "[bchBits, pbchSymbols, nfmod4, mib, ENB.CellRefP] = ltePBCHDecode(ENB, pbchRx, pbchHest, nest);\n"
+		      "clear enb;\n"
+		      "enb = lteMIB(mib, ENB);\n"
+		      "enb.NFrame = enb.NFrame+nfmod4;\n"
+		      "FAIL = 0;");
+
+  engEvalString(m_ep,"if (enb.CellRefP==0) FAIL=1;return;end\n"
+		     "if (enb.NDLRB==0) FAIL=1;return; end\n");
+
+  mxArray* FAIL = engGetVariable(m_ep, "FAIL");
+  double fail = mxGetScalar(FAIL);
+  if(fail)
+    NS_FATAL_ERROR("Demodulcation failed miserably");
+
+}
+
+Ptr<SpectrumSignalParameters>
+MatlabChannel::DeserializeCtlrParams(Ptr<LteSpectrumSignalParametersDlCtrlFrame> txParams)
+{
+  engEvalString(m_ep, "NDLRB = enb.NDLRB;\n"
+		      "NFrame = enb.NFrame;\n"
+		      "NCellID = enb.NCellID;\n");
+
+  mxArray* NLDRB = engGetVariable(m_ep, "NDLRB");
+  mxArray* NFrame = engGetVariable(m_ep, "NFrame");
+  mxArray* CELLID = engGetVariable(m_ep, "NCellID");
+
+  Ptr<MibLteControlMessage> mibMsg;
+  LteRrcSap::MasterInformationBlock mib;
+  mib.dlBandwidth = mxGetScalar(NLDRB);
+  mib.systemFrameNumber = mxGetScalar(NFrame);
+  mibMsg = Create<MibLteControlMessage>();
+  mibMsg->SetMib(mib);
+
+  std::list<Ptr<LteControlMessage> > ctrlMsgList;
+  ctrlMsgList.push_back(mibMsg);
+  Ptr<LteSpectrumSignalParametersDlCtrlFrame> rxParams = DynamicCast<LteSpectrumSignalParametersDlCtrlFrame>(txParams->Copy());
+  rxParams->ctrlMsgList = ctrlMsgList;
+  rxParams->cellId = *mxGetPr(CELLID);
+
+  return rxParams;
+
+}
+
+Ptr<SpectrumSignalParameters>
+MatlabChannel::DeserializeUlSrsParams(Ptr<LteSpectrumSignalParametersUlSrsFrame> txParams)
+{
+  Ptr<SpectrumSignalParameters> rxParams = txParams->Copy();
+
+  return rxParams;
+
+}
+
+Ptr<SpectrumSignalParameters>
+MatlabChannel::DeserializeDataParams(Ptr<LteSpectrumSignalParametersDataFrame> txParams)
+{
+  Ptr<SpectrumSignalParameters> rxParams = txParams->Copy();
+
+  return rxParams;
+
 }
 
 TxSpectrumModelInfoMap_t::const_iterator
@@ -382,16 +563,6 @@ MatlabChannel::FindAndEventuallyAddTxSpectrumModel (Ptr<const SpectrumModel> txS
 void
 MatlabChannel::StartRx (Ptr<SpectrumSignalParameters> params, Ptr<SpectrumPhy> receiver)
 {
-  mxArray* NLDRB = engGetVariable(m_ep, "enb.NLDRB");
-  mxArray* NFrame = engGetVariable(m_ep, "enb.NFrame");
-
-  Ptr<MibLteControlMessage> mibMsg;
-  LteRrcSap::MasterInformationBlock mib;
-  mib.dlBandwidth = *mxGetPr(NLDRB);
-  mib.systemFrameNumber = *mxGetPr(NFrame);
-  mibMsg = Create<MibLteControlMessage>();
-  mibMsg->SetMib(mib);
-
   NS_LOG_FUNCTION (this);
   receiver->StartRx (params);
 }

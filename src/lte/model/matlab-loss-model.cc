@@ -191,6 +191,9 @@ MatlabLossModel::DoCalcRxPowerSpectralDensity (
   mxArray* psdrx = mxCreateDoubleMatrix(1,numBands, mxREAL);
   mxArray* numRBs = mxCreateDoubleScalar(numBands);
   mxArray* fs = mxCreateDoubleScalar(FS);
+  Time NOW = Now();
+  mxArray* now = mxCreateDoubleScalar((double)NOW.GetDouble()*1e6);
+  engPutVariable(m_ep, "now", now);
 
   /*
    * The LTE model generates a spectrum model with NumBands that corresponds to the number of resource
@@ -199,21 +202,36 @@ MatlabLossModel::DoCalcRxPowerSpectralDensity (
   engPutVariable(m_ep,"numRBs",numRBs);
   engPutVariable(m_ep,"fs", fs);
 
-  engEvalString(m_ep,"ts = 1/fs;"
-		  	  	  	 "TTI = 0.001;"
-		  	  	  	 "numSamples = TTI / ts;");
+  engEvalString(m_ep,"chcfg.DelayProfile = 'EPA';"
+		      "chcfg.NRxAnts = 1;"
+		      "chcfg.DopplerFreq = 5;"
+		      "chcfg.MIMOCorrelation = 'Low';"
+		      "chcfg.SamplingRate = fs;"
+		      "chcfg.Seed = 1;"
+		      "chcfg.InitPhase = 'Random';"
+		      "chcfg.ModelType = 'GMEDS';"
+		      "chcfg.NTerms = 16;"
+		      "chcfg.NormalizeTxAnts = 'On';"
+		      "chcfg.NormalizePathGains = 'On';"
+		      "chcfg.InitTime = now;");
 
-  engEvalString(m_ep,"c = rayleighchan(ts, fd, delays_pedestrianEPA, power_pedestrianEPA);"
-		  	  	  	 "c.ResetBeforeFiltering = 0;"
-		  	  	  	 "c.NormalizePathGains = 1");
+
+  engEvalString(m_ep,"ts = 1/fs;"
+		     "TTI = 0.001;"
+		     "numSamples = TTI / ts;");
+
+//  engEvalString(m_ep,"c = rayleighchan(ts, fd, delays_pedestrianEPA, power_pedestrianEPA);"
+//		  	  	  	 "c.ResetBeforeFiltering = 0;"
+//		  	  	  	 "c.NormalizePathGains = 1");
 
   engEvalString(m_ep,"sig = zeros(numSamples, 1);"
-		  	  	  	 "sig(1) = 1;"
-		  	  	  	 "[psdsig,F] = pwelch(sig,[],[],numRBs,fs,'twosided');");
+		     "sig(1) = 1;"
+		     "[psdsig,F] = pwelch(sig,[],[],numRBs,fs,'twosided');");
 
-  engEvalString(m_ep,"y = filter(c,sig);");
+//  engEvalString(m_ep,"y = filter(c,sig);");
+  engEvalString(m_ep,"y = lteFadingChannel(chcfg, sig);");
   engEvalString(m_ep,"[psdy,F] = pwelch(y,[],[],numRBs,fs);"
-		  	  	  	 "psdy = psdy ./ psdsig;");
+		     "psdy = psdy ./ psdsig;");
 
   psdrx = engGetVariable(m_ep, "psdy");
   double* fadingValues = (double *)mxGetData(psdrx);
@@ -222,7 +240,11 @@ MatlabLossModel::DoCalcRxPowerSpectralDensity (
 //  Values::iterator fit = fadingValues->ValuesBegin();
   while (vit != rxPsd->ValuesEnd ())
   {
-	  if(*vit == 0) continue;
+	  if(*vit == 0)
+	    {
+	      ++vit;
+	      continue;
+	    }
 
 	  double power = *vit;
 	  power = 10 * std::log10 (180000 * power); // in dB

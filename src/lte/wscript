@@ -7,20 +7,20 @@ def build(bld):
     if (bld.env['ENABLE_EMU']):
         lte_module_dependencies.append('fd-net-device')
 
-    mat_module = bld.create_ns3_module('matlab',['core','spectrum','lte'])
+    mat_module = bld.create_ns3_module('matlab',['core','spectrum'])
     MATLABROOT=os.getenv("MATLABROOT")
-    mat_module.source = ['model/matlab-channel.cc']
+    mat_module.source = ['model/matlab-loss-model.cc']
     mat_headers = bld(features='ns3header')
     mat_headers.module='matloss'
-    mat_headers.source = ['model/matlab-channel.h']
+    mat_headers.source = ['model/matlab-loss-model.h']
     mat_module.env.append_value('CXXFLAGS', ["-I"+str(MATLABROOT)+"/extern/include","-I"+str(MATLABROOT)+"/simulink/include",'-ansi','-fexceptions','-fPIC','-fno-omit-frame-pointer','-pthread','-std=c++11'])
     mat_module.env.append_value('LINKFLAGS', ['-L'+str(MATLABROOT)+'/bin/glnxa64','-Wl,--no-as-needed,--no-undefined','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat'])  
 # mat_module.env.append_value('LINKFLAGS', ['-LMATLABROOT/bin/glnxa64','-Wl,-rpath,MATLABROOT/bin/glnxa64','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat','-LMATLABROOT/runtime/glnxa64/','-lmwmclmcrrt','-lboost_filesystem','-lboost_signals','-lboost_system','-lboost_thread','-lboost_date_time','-lboost_iostreams','-lboost_log'])
     
-#    lte_module_dependencies.append('matlab')
+    lte_module_dependencies.append('matlab')
     module = bld.create_ns3_module('lte', lte_module_dependencies)
     module.source = [
-#	'model/matlab-channel.cc',
+#	'model/matlab-loss-model.cc',
         'model/lte-common.cc',
         'model/lte-spectrum-phy.cc',
         'model/lte-spectrum-signal-parameters.cc',
@@ -196,7 +196,7 @@ def build(bld):
     headers = bld(features='ns3header')
     headers.module = 'lte'
     headers.source = [
-	#'model/matlab-channel.h',
+	#'model/matlab-loss-model.h',
         'model/lte-common.h',
         'model/lte-spectrum-phy.h',
         'model/lte-spectrum-signal-parameters.h',

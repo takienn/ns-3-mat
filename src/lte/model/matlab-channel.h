@@ -130,6 +130,11 @@ private:
   void SerializeCtrlParams(Ptr<LteSpectrumSignalParametersDlCtrlFrame> params);
   void SerializeSrsParams(Ptr<LteSpectrumSignalParametersUlSrsFrame> params);
   void SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgList);
+
+  void PassThroughChannel();
+  Ptr<SpectrumSignalParameters> DeserializeCtlrParams(Ptr<LteSpectrumSignalParametersDlCtrlFrame> txParams);
+  Ptr<SpectrumSignalParameters> DeserializeUlSrsParams(Ptr<LteSpectrumSignalParametersUlSrsFrame> txParams);
+  Ptr<SpectrumSignalParameters> DeserializeDataParams(Ptr<LteSpectrumSignalParametersDataFrame> txParams);
   /**
     * Data structure holding, for each TX SpectrumModel,  all the
     * converters to any RX SpectrumModel, and all the corresponding
@@ -150,7 +155,7 @@ private:
     */
    uint32_t m_numDevices;
 
-   Engine* m_ep;
+   static Engine* m_ep;
 
 };
 
