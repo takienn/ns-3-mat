@@ -1,0 +1,1 @@
+export MATLABROOT="PATH TO bin/glnx64 folder" without the trailing '/'
