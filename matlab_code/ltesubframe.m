@@ -34,14 +34,18 @@ ind4 = ltePBCHIndices(enb);
 
 % PDCCH
 pdcchInfo = ltePDCCHInfo(enb);
-cw = randi([0,1],pdcchInfo.MTot,1); % creates dummy data for pdcch
+%cw = randi([0,1],pdcchInfo.MTot,1); % creates dummy data for pdcch
 % alternatively we can do:
-% ue = {};
-% ue.PDCCHFormat = 1;  % 0, 1, 2, 3
-% ue.RNTI = 0; % take from ns-3
-% dciInfo = lteDCIInfo(enb);
-% dcibits = zeros(dciInfo.Format1,1);
-% cw = lteDCIEncode(ue,dcibits);
+ue = {};
+ue.PDCCHFormat = 1;  % 0, 1, 2, 3
+ue.DCIFormat = 'Format1';
+ue.RNTI = 10; % take from ns-3
+ue.NDLRB = 25;
+ue.NULRB = 25;
+dciInfo = lteDCIInfo(enb);
+dcibits = zeros(dciInfo.Format1,1);
+dcibits(1:2) = [1; 1];
+cw = lteDCIEncode(ue,dcibits);
 [pdcchSym,info] = ltePDCCH(enb,cw);
 ind5 = ltePDCCHIndices(enb);
 
@@ -54,26 +58,27 @@ enb.PDSCH.RNTI = 0;
 enb.PDSCH.RV = 0;
 enb.PDSCH.Modulation = 'QPSK';
 enb.PDSCH.TxScheme = 'Port0';
-prbset = (0:enb.NDLRB-1)';
-[ind6,info] = ltePDSCHIndices(enb,enb.PDSCH,prbset);
+enb.PDSCH.PRBSet = (0:enb.NDLRB-1)';
+enb.PDSCH.NLayers = 1;
+[ind6,info] = ltePDSCHIndices(enb,enb.PDSCH,enb.PDSCH.PRBSet);
 trBlk  = randi([0,1],info.Gd,1);
 cw = lteDLSCH(enb,enb.PDSCH,info.G,trBlk);
+%cw(cw == 0) = -1;
 pdschSym = ltePDSCH(enb,enb.PDSCH,cw);
 
 
 
 
 
-sf = lteResourceGrid(enb);
-%sf = sf(:);
-sf(ind1) = rs;
-sf(ind2) = pss;
-sf(ind3) = sss;
+txgrid = lteResourceGrid(enb);
+txgrid(ind1) = rs;
+txgrid(ind2) = pss;
+txgrid(ind3) = sss;
 
-sf(ind4) = pbchSymbols(1:240);
-sf(ind5) = pdcchSym;
-sf(ind6) = pdschSym;
-waveform = lteOFDMModulate(enb,sf);
+txgrid(ind4) = pbchSymbols(1:240);
+txgrid(ind5) = pdcchSym;
+txgrid(ind6) = pdschSym;
+waveform = lteOFDMModulate(enb,txgrid);
 
 % channel model 
 % c = 3e8; 
@@ -119,13 +124,13 @@ waveform = lteOFDMModulate(enb,sf);
 % %c.StorePathGains = 1;
 % c.ResetBeforeFiltering = 0;
 % c.NormalizePathGains = 1;
-% y = filter(c,sf);   
+% y = filter(c,txgrid);   
 
-chcfg.DelayProfile = 'EPA';
+chcfg.DelayProfile = 'ETU';
 chcfg.NRxAnts = 1;
 chcfg.DopplerFreq = 5;
 chcfg.MIMOCorrelation = 'Low';
-chcfg.SamplingRate = 5e6; %info.SamplingRate;
+chcfg.SamplingRate = 7.68e6; %info.SamplingRate;
 chcfg.Seed = 1;
 chcfg.InitPhase = 'Random';
 chcfg.ModelType = 'GMEDS';
@@ -134,10 +139,8 @@ chcfg.NormalizeTxAnts = 'On';
 chcfg.NormalizePathGains = 'On';
 chcfg.InitTime = 0;
 
-% y = lteFadingChannel(chcfg,waveform);
-y = waveform + 0.001*rand(size(waveform));
-
-
+y = lteFadingChannel(chcfg,waveform);
+% y = waveform + 0.001*rand(size(waveform));
 
 % decoder
 cec.FreqWindow = 1;
@@ -149,8 +152,17 @@ cec.InterpWindow = 'Causal';
 
 rxgrid = lteOFDMDemodulate(enb, y);
 [hest,noisest] = lteDLChannelEstimate(enb, cec, rxgrid);
-rxpbchSym = rxgrid(ind4);
-[bits,symbols,nfmod4,trblk,cellrefp] = ltePBCHDecode(enb, rxpbchSym, hest, noisest);
 
-mib_decoded = trblk;
+rxpbchSym = rxgrid(ind4);
+[pbchbits,~,nfmod4,mib_decoded,cellrefp] = ltePBCHDecode(enb, [rxpbchSym; rxpbchSym; rxpbchSym; rxpbchSym], hest, noisest);
+
+rxpdcchSym = rxgrid(ind5);
+[pdcchbits,~] = ltePDCCHDecode(enb,rxpdcchSym,hest(ind5),noisest);
+[decodeddcibits,crc_rnti] = lteDCIDecode(ue,pdcchbits);
+
+rxpdschSym = rxgrid(ind6);
+[pdschbits,~] = ltePDSCHDecode(enb,enb.PDSCH,rxgrid,hest,noisest);
+[trblkout,blkcrc,stateout] = lteDLSCHDecode(enb,enb.PDSCH,info.Gd,pdschbits{1, 1},[]);
+
+
 
