@@ -175,6 +175,42 @@ protected:
   Buffer::Iterator DeserializeDlCcchMessage (Buffer::Iterator bIterator);
 };
 
+class Sib1Message : public Asn1Header
+{
+public:
+  Sib1Message ();
+  ~Sib1Message ();
+
+  // Inherited from RrcAsn1Header
+  uint32_t Deserialize (Buffer::Iterator bIterator);
+  void Print (std::ostream &os) const;
+  void PreSerialize () const;
+
+  void SetMessage (LteRrcSap::SystemInformationBlockType1 msg);
+
+protected:
+
+  void SerializePlmnIdentity (uint32_t plmnId) const;
+  Buffer::Iterator DeserializePlmnIdentity (uint32_t *plmnId, Buffer::Iterator bIterator);
+
+  void SerializeSystemInformationBlockType1 (LteRrcSap::SystemInformationBlockType1 systemInformationBlockType1) const;
+  /**
+  * Receives a RrcConnectionSetup IE and stores the contents into the class attributes
+  * @param msg The information element to parse
+  */
+
+  Buffer::Iterator DeserializeSystemInformationBlockType1 (LteRrcSap::SystemInformationBlockType1 *systemInformationBlockType1, Buffer::Iterator bIterator);
+
+  /**
+  * Returns a SystemInformationBlockType1 IE from the values in the class attributes
+  * @return A SystemInformationBlockType1, as defined in LteRrcSap
+  */
+  LteRrcSap::SystemInformationBlockType1 GetMessage () const;
+
+private:
+  mutable LteRrcSap::SystemInformationBlockType1 m_sib1;
+};
+
 /**
 * This class manages the serialization/deserialization of RrcConnectionRequest IE
 */

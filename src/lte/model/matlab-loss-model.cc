@@ -39,7 +39,6 @@ NS_OBJECT_ENSURE_REGISTERED (MatlabLossModel);
 
 
 MatlabLossModel::MatlabLossModel ()
-  : m_streamsAssigned (false)
 {
   NS_LOG_FUNCTION (this);
   SetNext (NULL);
@@ -48,9 +47,7 @@ MatlabLossModel::MatlabLossModel ()
 
 MatlabLossModel::~MatlabLossModel ()
 {
-  m_fadingTrace.clear ();
-  m_windowOffsetsMap.clear ();
-  m_startVariableMap.clear ();
+
 }
 
 
@@ -59,49 +56,23 @@ MatlabLossModel::GetTypeId (void)
 {
   static TypeId tid = TypeId ("ns3::MatlabLossModel")
     .SetParent<SpectrumPropagationLossModel> ()
-    .SetGroupName("Lte")
+    .SetGroupName("lte")
     .AddConstructor<MatlabLossModel> ()
-    .AddAttribute ("TraceLength",
-                  "The total length of the fading trace (default value 10 s.)",
-                  TimeValue (Seconds (10.0)),
-                  MakeTimeAccessor (&MatlabLossModel::SetTraceLength),
-                  MakeTimeChecker ())
-    .AddAttribute ("SamplesNum",
-                  "The number of samples the trace is made of (default 10000)",
-                   UintegerValue (10000),
-                   MakeUintegerAccessor (&MatlabLossModel::m_samplesNum),
-                   MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("WindowSize",
-                  "The size of the window for the fading trace (default value 0.5 s.)",
-                  TimeValue (Seconds (0.5)),
-                  MakeTimeAccessor (&MatlabLossModel::m_windowSize),
-                  MakeTimeChecker ())
-    .AddAttribute ("RbNum",
+    .AddAttribute ("FadingScenario",
                     "The number of RB the trace is made of (default 100)",
-                    UintegerValue (100),
-                   MakeUintegerAccessor (&MatlabLossModel::m_rbNum),
-                   MakeUintegerChecker<uint8_t> ())
-    .AddAttribute ("RngStreamSetSize",
-                    "The number of RNG streams reserved for the fading model. The maximum number of streams that are needed for an LTE FDD scenario is 2 * numUEs * numeNBs.",
-                    UintegerValue (200000),
-                   MakeUintegerAccessor (&MatlabLossModel::m_streamSetSize),
-                   MakeUintegerChecker<uint64_t> ())
+                    StringValue ("EPA"),
+                   MakeStringAccessor(&MatlabLossModel::m_fadingScenario),
+                   MakeStringChecker())
   ;
   return tid;
 }
 
 void
-MatlabLossModel::SetTraceFileName (std::string fileName)
+MatlabLossModel::SetFadingScenario (std::string scenario)
 {
-  NS_LOG_FUNCTION (this << "Set Fading Trace " << fileName);
+  NS_LOG_FUNCTION (this << "Set Fading Scenario" << scenario);
   
-  m_traceFile = fileName;
-}
-
-void 
-MatlabLossModel::SetTraceLength (Time t)
-{
-  m_traceLength = t;
+  m_fadingScenario = scenario;
 }
 
 void 
@@ -117,48 +88,13 @@ MatlabLossModel::DoInitialize ()
 	NS_ASSERT(m_ep);
 
 	engEvalString(m_ep, "c=3e8;"
-						"fc = 1930e6;"
-						"lambda = c/fc;"
-						"v_km_h = 3.0;"
-						"v_m_s = v_km_h / 3.6;"
-						"fd = v_m_s / lambda;");
-	engEvalString(m_ep, "delays_pedestrianEPA = [0 30e-9 70e-9 90e-9 120e-9 190e-9 410e-9];");
-	engEvalString(m_ep, "power_pedestrianEPA = [0.0 -1.0 -2.0 -3.0 -8.0 -17.2 -20.8];");
-//	engEvalString(m_ep, "fs=1.4e6 ;ts=1/fs;");
-//	engEvalString(m_ep, "c = rayleighchan(ts, fd, delays_pedestrianEPA, power_pedestrianEPA);");
-//	engEvalString(m_ep, "c.ResetBeforeFiltering = 0;c.NormalizePathGains = 1;");
-//	engEvalString(m_ep, " TTI = 0.001; numSamples = TTI / ts;");
-}
-
-
-void
-MatlabLossModel::LoadTrace ()
-{
-  NS_LOG_FUNCTION (this << "Loading Fading Trace " << m_traceFile);
-  std::ifstream ifTraceFile;
-  ifTraceFile.open (m_traceFile.c_str (), std::ifstream::in);
-  m_fadingTrace.clear ();
-  if (!ifTraceFile.good ())
-    {
-      NS_LOG_INFO (this << " File: " << m_traceFile);
-      NS_ASSERT_MSG(ifTraceFile.good (), " Fading trace file not found");
-    }
-
-//   NS_LOG_INFO (this << " length " << m_traceLength.GetSeconds ());
-//   NS_LOG_INFO (this << " RB " << (uint32_t)m_rbNum << " samples " << m_samplesNum);
-  for (uint32_t i = 0; i < m_rbNum; i++)
-    {
-      FadingTraceSample rbTimeFadingTrace;
-      for (uint32_t j = 0; j < m_samplesNum; j++)
-        {
-          double sample;
-          ifTraceFile >> sample;
-          rbTimeFadingTrace.push_back (sample);
-        }
-      m_fadingTrace.push_back (rbTimeFadingTrace);
-    }
-  m_timeGranularity = m_traceLength.GetMilliSeconds () / m_samplesNum;
-  m_lastWindowUpdate = Simulator::Now ();
+			    "fc = 1930e6;"
+			    "lambda = c/fc;"
+			    "v_km_h = 3.0;"
+			    "v_m_s = v_km_h / 3.6;"
+			    "fd = v_m_s / lambda;");
+//	engEvalString(m_ep, "delays_pedestrianEPA = [0 30e-9 70e-9 90e-9 120e-9 190e-9 410e-9];");
+//	engEvalString(m_ep, "power_pedestrianEPA = [0.0 -1.0 -2.0 -3.0 -8.0 -17.2 -20.8];");
 }
 
 
@@ -170,7 +106,6 @@ MatlabLossModel::DoCalcRxPowerSpectralDensity (
 {
   NS_LOG_FUNCTION (this << *txPsd << a << b);
   
-
   double numBands = (double)txPsd->GetSpectrumModel()->GetNumBands();
   double FS = 1.92e6;
 
@@ -191,22 +126,24 @@ MatlabLossModel::DoCalcRxPowerSpectralDensity (
   mxArray* psdrx = mxCreateDoubleMatrix(1,numBands, mxREAL);
   mxArray* numRBs = mxCreateDoubleScalar(numBands);
   mxArray* fs = mxCreateDoubleScalar(FS);
+  mxArray* scenario = mxCreateString(m_fadingScenario.c_str());
   Time NOW = Now();
   mxArray* now = mxCreateDoubleScalar((double)NOW.GetDouble()*1e6);
-  engPutVariable(m_ep, "now", now);
 
   /*
    * The LTE model generates a spectrum model with NumBands that corresponds to the number of resource
    * blocks used for that specific transmission (bandwidth)
    */
+  engPutVariable(m_ep, "scenario", scenario);
+  engPutVariable(m_ep, "now", now);
   engPutVariable(m_ep,"numRBs",numRBs);
   engPutVariable(m_ep,"fs", fs);
 
-  engEvalString(m_ep,"chcfg.DelayProfile = 'EPA';"
+  engEvalString(m_ep, "chcfg.DelayProfile = scenario;"
 		      "chcfg.NRxAnts = 1;"
 		      "chcfg.DopplerFreq = 5;"
 		      "chcfg.MIMOCorrelation = 'Low';"
-		      "chcfg.SamplingRate = fs;"
+		      "chcfg.SamplingRate = 20e6;"
 		      "chcfg.Seed = 1;"
 		      "chcfg.InitPhase = 'Random';"
 		      "chcfg.ModelType = 'GMEDS';"
@@ -215,14 +152,9 @@ MatlabLossModel::DoCalcRxPowerSpectralDensity (
 		      "chcfg.NormalizePathGains = 'On';"
 		      "chcfg.InitTime = now;");
 
-
   engEvalString(m_ep,"ts = 1/fs;"
 		     "TTI = 0.001;"
 		     "numSamples = TTI / ts;");
-
-//  engEvalString(m_ep,"c = rayleighchan(ts, fd, delays_pedestrianEPA, power_pedestrianEPA);"
-//		  	  	  	 "c.ResetBeforeFiltering = 0;"
-//		  	  	  	 "c.NormalizePathGains = 1");
 
   engEvalString(m_ep,"sig = zeros(numSamples, 1);"
 		     "sig(1) = 1;"
@@ -258,27 +190,6 @@ MatlabLossModel::DoCalcRxPowerSpectralDensity (
 
   NS_LOG_LOGIC (this << *rxPsd);
   return rxPsd;
-}
-
-int64_t
-MatlabLossModel::AssignStreams (int64_t stream)
-{
-  NS_LOG_FUNCTION (this << stream);
-  NS_ASSERT (m_streamsAssigned == false);  
-  m_streamsAssigned = true;
-  m_currentStream = stream;
-  m_lastStream = stream + m_streamSetSize - 1;
-  std::map <ChannelRealizationId_t, Ptr<UniformRandomVariable> >::iterator itVar;
-  itVar = m_startVariableMap.begin ();
-  // the following loop is for eventually pre-existing ChannelRealization instances
-  // note that more instances are expected to be created at run time
-  while (itVar!=m_startVariableMap.end ())
-    {
-      NS_ASSERT_MSG (m_currentStream <= m_lastStream, "not enough streams, consider increasing the StreamSetSize attribute");
-      (*itVar).second->SetStream (m_currentStream);
-      m_currentStream += 1;
-    }
-  return m_streamSetSize;
 }
 
 

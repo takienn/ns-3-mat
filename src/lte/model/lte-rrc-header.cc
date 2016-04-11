@@ -4316,6 +4316,278 @@ RrcConnectionSetupCompleteHeader::GetMessage () const
   return msg;
 }
 
+
+//////////////////// SIB1 class //////////////////////////////////////
+Sib1Message::Sib1Message ()
+{
+
+}
+
+Sib1Message::~Sib1Message ()
+{
+
+}
+
+void
+Sib1Message::Print (std::ostream &os) const
+{
+  os << "Cell Access Related Info:" << std::endl;
+  os << "	Cell Identity " << m_sib1.cellAccessRelatedInfo.cellIdentity << std::endl;
+  os << "	Csg Identity " << m_sib1.cellAccessRelatedInfo.csgIdentity << std::endl;
+  os << "	Csg Indication " << m_sib1.cellAccessRelatedInfo.csgIndication << std::endl;
+  os << "	PLMN Identity " << m_sib1.cellAccessRelatedInfo.plmnIdentityInfo.plmnIdentity << std::endl;
+
+  os << "Cell Selection Info:" << std::endl;
+  os << "	qQualMin " << (int)m_sib1.cellSelectionInfo.qQualMin << std::endl;
+  os << "	qRxLevMin " << (int)m_sib1.cellSelectionInfo.qRxLevMin << std::endl;
+}
+
+void
+Sib1Message::SetMessage (LteRrcSap::SystemInformationBlockType1 msg)
+{
+  m_sib1 = msg;
+}
+
+void
+Sib1Message::SerializePlmnIdentity (uint32_t plmnId) const
+{
+  // plmn-Identity sequence, mcc is optional, no extension marker
+  SerializeSequence (std::bitset<1> (0), false);
+
+  // Serialize mnc
+  int nDig = (plmnId > 99) ? 3 : 2;
+
+  SerializeSequenceOf (nDig,3,2);
+  for (int i = nDig - 1; i >= 0; i--)
+    {
+      int n = floor (plmnId / pow (10,i));
+      SerializeInteger (n,0,9);
+      plmnId -= n * pow (10,i);
+    }
+
+  // cellReservedForOperatorUse
+  SerializeEnum (2,0);
+}
+
+Buffer::Iterator
+Sib1Message::DeserializePlmnIdentity (uint32_t *plmnId, Buffer::Iterator bIterator)
+{
+  int n;
+  std::bitset<1> isMccPresent;
+  bIterator = DeserializeSequence (&isMccPresent,false,bIterator);
+
+  if (isMccPresent[0])
+    {
+      // Deserialize mcc
+      // ...
+    }
+
+  // Deserialize mnc
+  int mncDigits;
+  int mnc = 0;
+  bIterator = DeserializeSequenceOf (&mncDigits,3,2,bIterator);
+
+  for (int j = mncDigits - 1; j >= 0; j--)
+    {
+      bIterator = DeserializeInteger (&n,0,9,bIterator);
+      mnc += n * pow (10,j);
+    }
+
+  *plmnId = mnc;
+
+  // cellReservedForOperatorUse
+  bIterator = DeserializeEnum (2,&n,bIterator);
+  return bIterator;
+}
+
+void
+Sib1Message::SerializeSystemInformationBlockType1 (LteRrcSap::SystemInformationBlockType1 systemInformationBlockType1) const
+{
+  // 3 optional fields, no extension marker.
+  std::bitset<3> sysInfoBlk1Opts;
+  sysInfoBlk1Opts.set (2,0); // p-Max absent
+  sysInfoBlk1Opts.set (1,0); // tdd-Config absent
+  sysInfoBlk1Opts.set (0,0); // nonCriticalExtension absent
+  SerializeSequence (sysInfoBlk1Opts,false);
+
+  // Serialize cellAccessRelatedInfo
+  // 1 optional field (csgIdentity) which is present, no extension marker.
+  SerializeSequence (std::bitset<1> (1),false);
+
+  // Serialize plmn-IdentityList
+  SerializeSequenceOf (1,6,1);
+
+  // PLMN-IdentityInfo
+  SerializeSequence (std::bitset<0> (),false);
+
+  SerializePlmnIdentity (systemInformationBlockType1.cellAccessRelatedInfo.plmnIdentityInfo.plmnIdentity);
+
+  // Serialize trackingAreaCode
+  SerializeBitstring (std::bitset<16> (0));
+  // Serialize cellIdentity
+  SerializeBitstring (std::bitset<28> (systemInformationBlockType1.cellAccessRelatedInfo.cellIdentity));
+  // Serialize cellBarred
+  SerializeEnum (2,0);
+  // Serialize intraFreqReselection
+  SerializeEnum (2,0);
+  // Serialize csg-Indication
+  SerializeBoolean (systemInformationBlockType1.cellAccessRelatedInfo.csgIndication);
+  // Serialize csg-Identity
+  SerializeBitstring (std::bitset<27> (systemInformationBlockType1.cellAccessRelatedInfo.csgIdentity));
+
+  // Serialize cellSelectionInfo
+  SerializeSequence (std::bitset<1> (0),false);
+  // Serialize q-RxLevMin
+  SerializeInteger (-50,-70,-22);
+
+  // Serialize freqBandIndicator
+  SerializeInteger (1,1,64);
+
+  // Serialize schedulingInfoList
+  SerializeSequenceOf (1,MAX_SI_MESSAGE,1);
+  // SchedulingInfo
+  SerializeSequence (std::bitset<0> (),false);
+  // si-Periodicity
+  SerializeEnum (7,0);
+  // sib-MappingInfo
+  SerializeSequenceOf (0,MAX_SIB - 1,0);
+
+  // Serialize si-WindowLength
+  SerializeEnum (7,0);
+
+  // Serialize systemInfoValueTag
+  SerializeInteger (0,0,31);
+}
+
+Buffer::Iterator
+Sib1Message::DeserializeSystemInformationBlockType1 (LteRrcSap::SystemInformationBlockType1 *systemInformationBlockType1, Buffer::Iterator bIterator)
+{
+  std::bitset<0> bitset0;
+  int n;
+
+  std::bitset<3> sysInfoBlkT1Opts;
+  bIterator = DeserializeSequence (&sysInfoBlkT1Opts,false,bIterator);
+
+  // Deserialize cellAccessRelatedInfo
+  std::bitset<1> cellAccessRelatedInfoOpts;
+  bIterator = DeserializeSequence (&cellAccessRelatedInfoOpts,false,bIterator);
+
+  // Deserialize plmn-IdentityList
+  int numPlmnIdentityInfoElements;
+  bIterator = DeserializeSequenceOf (&numPlmnIdentityInfoElements,6,1,bIterator);
+  for (int i = 0; i < numPlmnIdentityInfoElements; i++)
+    {
+      bIterator = DeserializeSequence (&bitset0,false,bIterator);
+
+      // plmn-Identity
+      bIterator = DeserializePlmnIdentity (&systemInformationBlockType1->cellAccessRelatedInfo.plmnIdentityInfo.plmnIdentity,bIterator);
+    }
+
+  // Deserialize trackingAreaCode
+  std::bitset<16> trackingAreaCode;
+  bIterator = DeserializeBitstring (&trackingAreaCode,bIterator);
+
+  // Deserialize cellIdentity
+  std::bitset<28> cellIdentity;
+  bIterator = DeserializeBitstring (&cellIdentity,bIterator);
+  systemInformationBlockType1->cellAccessRelatedInfo.cellIdentity = cellIdentity.to_ulong ();
+
+  // Deserialize cellBarred
+  bIterator = DeserializeEnum (2,&n,bIterator);
+
+  // Deserialize intraFreqReselection
+  bIterator = DeserializeEnum (2,&n,bIterator);
+
+  // Deserialize csg-Indication
+  bIterator = DeserializeBoolean (&systemInformationBlockType1->cellAccessRelatedInfo.csgIndication,bIterator);
+
+  if (cellAccessRelatedInfoOpts[0])
+    {
+      // Deserialize csg-Identity
+      std::bitset<27> csgIdentity;
+      bIterator = DeserializeBitstring (&csgIdentity,bIterator);
+      systemInformationBlockType1->cellAccessRelatedInfo.csgIdentity = csgIdentity.to_ulong ();
+    }
+
+  // Deserialize cellSelectionInfo
+  std::bitset<1> qRxLevMinOffsetPresent;
+  bIterator = DeserializeSequence (&qRxLevMinOffsetPresent,false,bIterator);
+  bIterator = DeserializeInteger (&n,-70,-22,bIterator); //q-RxLevMin
+  if (qRxLevMinOffsetPresent[0])
+    {
+      // Deserialize qRxLevMinOffset
+      // ...
+    }
+
+  if (sysInfoBlkT1Opts[2])
+    {
+      // Deserialize p-Max
+      // ...
+    }
+
+  // freqBandIndicator
+  bIterator = DeserializeInteger (&n,1,64,bIterator);
+
+  // schedulingInfoList
+  int numSchedulingInfo;
+  bIterator = DeserializeSequenceOf (&numSchedulingInfo,MAX_SI_MESSAGE,1,bIterator);
+  for (int i = 0; i < numSchedulingInfo; i++)
+    {
+      bIterator = DeserializeSequence (&bitset0,false,bIterator);
+      bIterator = DeserializeEnum (7,&n,bIterator); // si-Periodicity
+      int numSibType;
+      bIterator = DeserializeSequenceOf (&numSibType,MAX_SIB - 1,0, bIterator); // sib-MappingInfo
+      for (int j = 0; j < numSibType; j++)
+        {
+          bIterator = DeserializeEnum (16,&n,bIterator); // SIB-Type
+        }
+    }
+
+  if (sysInfoBlkT1Opts[1])
+    {
+      // tdd-Config
+      // ...
+    }
+
+  // si-WindowLength
+  bIterator = DeserializeEnum (7,&n,bIterator);
+
+  // systemInfoValueTag
+  bIterator = DeserializeInteger (&n,0,31,bIterator);
+
+  if (sysInfoBlkT1Opts[0])
+    {
+      // Deserialize nonCriticalExtension
+      // ...
+    }
+  return bIterator;
+}
+
+void
+Sib1Message::PreSerialize() const
+{
+  // Serialize sourceSystemInformationBlockType1 sequence
+  SerializeSystemInformationBlockType1 (m_sib1);
+
+  // Finish serialization
+  FinalizeSerialization ();
+}
+
+uint32_t
+Sib1Message::Deserialize (Buffer::Iterator bIterator)
+{
+  // Deserialize sourceSystemInformationBlockType1
+  bIterator = DeserializeSystemInformationBlockType1 (&m_sib1,bIterator);
+
+  return GetSerializedSize ();
+}
+
+LteRrcSap::SystemInformationBlockType1
+Sib1Message::GetMessage () const
+{
+  return m_sib1;
+}
+
 //////////////////// RrcConnectionReconfigurationCompleteHeader class ////////////////////////
 
 RrcConnectionReconfigurationCompleteHeader::RrcConnectionReconfigurationCompleteHeader ()

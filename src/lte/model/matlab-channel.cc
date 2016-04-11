@@ -9,6 +9,8 @@
 #include <ns3/net-device.h>
 #include <ns3/assert.h>
 #include <ns3/node.h>
+#include <ns3/lte-rrc-header.h>
+#include <ns3/lte-rrc-sap.h>
 
 #include <list>
 #include "matlab-channel.h"
@@ -49,11 +51,33 @@ MatlabChannel::MatlabChannel()
 	"ENB.PHICHDuration = 'Normal';\n"
 	"ENB.DuplexMode = 'FDD';\n"
 	"ENB.CFI = 3;\n"
-	"ENB.Ng = 'Sixth';\n");
+	"ENB.Ng = 'Sixth';\n"
+	"chcfg.DelayProfile = 'EPA';\n"
+       "chcfg.NRxAnts = 1;\n"
+       "chcfg.DopplerFreq = 5;\n"
+       "chcfg.MIMOCorrelation = 'Low';\n"
+       "chcfg.Seed = 1;\n"
+       "chcfg.InitPhase = 'Random';\n"
+       "chcfg.ModelType = 'GMEDS';\n"
+       "chcfg.NTerms = 16;\n"
+       "chcfg.NormalizeTxAnts = 'On';\n"
+       "chcfg.NormalizePathGains = 'On';\n");
+
+      engEvalString(m_ep, "hSpecAnalTx = dsp.SpectrumAnalyzer('SampleRate', 7.68e6, "
+	  "'SpectrumType', 'Power density', 'PowerUnits', 'dBm', "
+	  "'RBWSource', 'Property',   'RBW', 15e3, "
+	  "'FrequencySpan', 'Span and center frequency', "
+	  "'Span', 7.68e6, 'CenterFrequency', 0, "
+	  "'Window', 'Rectangular', 'SpectralAverages', 10, "
+	  "'YLimits', [-100 -60], "
+	  "'YLabel', 'PSD', "
+	  "'Title', 'NS-3 Generated Signal', "
+	  "'ShowLegend', false);");
     }
 
 
 }
+
 void
 MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
 {
@@ -318,8 +342,12 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 
 	  break;
 	case LteControlMessage::DL_CQI:
-
-	  break;
+	  {
+//	    Ptr<DlCqiLteControlMessage> cqiMsg = StaticCast<DlCqiLteControlMessage> (msg);
+//	    CqiListElement_s cqiElements = cqiMsg->GetDlCqi();
+//	    cqiElements.m_cqiType;
+	    break;
+	  }
 	case LteControlMessage::DL_DCI:
 
 	  break;
@@ -358,14 +386,27 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 
 	  break;
 	case LteControlMessage::SIB1:
-//	  Sib1LteControlMessage sibMsg = StaticCast<Sib1LteControlMessage>(msg);
-//	  LteRrcSap::SystemInformationBlockType1 sib1 = sibMsg.GetSib1();
-//	  sib1.cellAccessRelatedInfo.plmnIdentityInfo.plmnIdentity.;
-	  RrcAsn1Header asn1Header;
-	  Buffer::Iterator it;
-	  asn1Header.Serialize(it);
+	  {
+	    Ptr<Sib1LteControlMessage> sibMsg = StaticCast<Sib1LteControlMessage>(msg);
+	    LteRrcSap::SystemInformationBlockType1 sib1 = sibMsg->GetSib1();
 
-	  break;
+	    Sib1Message s;
+	    s.SetMessage(sib1);
+
+	    std::cout << "SIB1 \n";
+	    s.Print(std::cout);
+
+	    Buffer buffer;
+	    uint32_t bufferSize = s.GetSerializedSize();
+	    buffer.AddAtStart (bufferSize);
+	    s.Serialize(buffer.Begin());
+
+	    mxArray *SIB1 = mxCreateNumericMatrix(bufferSize, 1, mxUINT8_CLASS, mxREAL);
+	    buffer.CopyData((uint8_t*)mxGetPr(SIB1), bufferSize);
+	    engPutVariable(m_ep, "SIB1", SIB1);
+
+	    break;
+	  }
 	case LteControlMessage::UL_CQI:
 
 	  break;
@@ -378,23 +419,15 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
     }
 
   engEvalString(m_ep, "txWaveform = lteOFDMModulate(ENB,subframe);\n");
+  engEvalString(m_ep, "step(hSpecAnalTx, txWaveform);");
 
 }
+
 
 void
 MatlabChannel::PassThroughChannel()
 {
-  engEvalString(m_ep,"chcfg.DelayProfile = 'EPA';\n"
-		     "chcfg.NRxAnts = 1;\n"
-		     "chcfg.DopplerFreq = 5;\n"
-		     "chcfg.MIMOCorrelation = 'Low';\n"
-		     "chcfg.SamplingRate = FS;\n"
-		     "chcfg.Seed = 1;\n"
-		     "chcfg.InitPhase = 'Random';\n"
-		     "chcfg.ModelType = 'GMEDS';\n"
-		     "chcfg.NTerms = 16;\n"
-		     "chcfg.NormalizeTxAnts = 'On';\n"
-		     "chcfg.NormalizePathGains = 'On';\n"
+  engEvalString(m_ep,"chcfg.SamplingRate = FS;\n"
 		     "chcfg.InitTime = (ENB.NFrame * 10 + ENB.NSubframe) * 10e-3;\n"
 		     "rxWaveform = lteFadingChannel(chcfg,txWaveform);\n");
 
@@ -464,10 +497,11 @@ MatlabChannel::PassThroughChannel()
   engEvalString(m_ep,"if (enb.CellRefP==0) FAIL=1;return;end\n"
 		     "if (enb.NDLRB==0) FAIL=1;return; end\n");
 
-  mxArray* FAIL = engGetVariable(m_ep, "FAIL");
-  double fail = mxGetScalar(FAIL);
-  if(fail)
-    NS_FATAL_ERROR("Demodulcation failed miserably");
+
+//  mxArray* FAIL = engGetVariable(m_ep, "FAIL");
+//  double fail = mxGetScalar(FAIL);
+//  if(fail)
+//    NS_FATAL_ERROR("Demodulcation failed miserably");
 
 }
 

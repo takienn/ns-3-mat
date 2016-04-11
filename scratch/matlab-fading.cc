@@ -142,6 +142,9 @@ int main (int argc, char *argv[])
   lteHelper->EnableRlcTraces ();
   lteHelper->EnablePdcpTraces ();
 
+  Ptr<RadioBearerStatsCalculator> rlcCalc = lteHelper->GetRlcStats();
+  rlcCalc->SetAttribute("EpochDuration", TimeValue(MilliSeconds(40.0)));
+
   Simulator::Stop (Seconds (5.005));
 
   Simulator::Run ();
