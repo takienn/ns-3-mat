@@ -713,6 +713,10 @@ def add_scratch_programs(bld):
                 obj.target = name
                 obj.name = obj.target
                 obj.install_path = None
+		if filename.startswith('mat'):
+			MATLABROOT=os.getenv("MATLABROOT")
+                	obj.env.append_value('CXXFLAGS', ["-g3","-ggdb","-I"+str(MATLABROOT)+"/extern/include","-I"+str(MATLABROOT)+"/simulink/include",'-ansi','-fexceptions','-fPIC','-fno-omit-frame-pointer','-pthread','-std=c++11'])
+                        obj.env.append_value('LINKFLAGS', ['-L'+str(MATLABROOT)+'/bin/glnxa64','-Wl,--no-as-needed,--no-undefined','-pthread','-lstdc++','-lm',"-lmx",'-leng','-lmat'])
     except OSError:
         return
 
