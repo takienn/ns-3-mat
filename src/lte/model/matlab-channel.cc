@@ -52,6 +52,9 @@ MatlabChannel::MatlabChannel()
 	"ENB.DuplexMode = 'FDD';\n"
 	"ENB.CFI = 3;\n"
 	"ENB.Ng = 'Sixth';\n"
+	"ENB.DuplexMode = 'FDD';\n"
+	"dciConfig.DCIFormat = 'Format1A';\n"
+	"dciConfig.Allocation.RIV = 26;\n"
 	"chcfg.DelayProfile = 'EPA';\n"
        "chcfg.NRxAnts = 1;\n"
        "chcfg.DopplerFreq = 5;\n"
@@ -138,7 +141,19 @@ MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
 	    engEvalString(m_ep, "ENB.NDLRB = dlBw;"
 				"ENB.NFrame = NFrame;"
 				"ENB.NSubframe = NSubframe;"
-				"subframe = lteDLResourceGrid(ENB)");
+				"subframe = lteDLResourceGrid(ENB);"
+				"[dciMessage, dciMessageBits] = lteDCI(ENB, dciConfig);"
+				"C_RNTI = 100;"
+				"pdcchConfig.RNTI = C_RNTI;"
+				"pdcchConfig.PDCCHFormat = 0;"
+				"codedDciBits = lteDCIEncode(pdcchConfig, dciMessageBits);"
+				"pdcchDims = ltePDCCHInfo(ENB);"
+				"pdcchBits = -1*ones(pdcchDims.MTot, 1);"
+				"candidates = ltePDCCHSpace(ENB, pdcchConfig, {'bits', '1based'});"
+				"pdcchBits ( candidates(1, 1) : candidates(1, 2) ) = codedDciBits;"
+				"pdcchSymbols = ltePDCCH(ENB, pdcchBits);"
+				"pdcchIndices = ltePDCCHIndices(ENB,{'1based'});"
+				"subframe(pdcchIndices) = pdcchSymbols;");
 	    double FS = 1.92e6;
 
 	    if(dlBw ==  6)
@@ -164,7 +179,8 @@ MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
 	//Generate Data Frame in MATLAB
 	SerializeCtrlParams (lteDlCtrlRxParams);
 	PassThroughChannel ();
-	rxParams = DeserializeCtlrParams(lteDlCtrlRxParams);
+//	rxParams = DeserializeCtlrParams(lteDlCtrlRxParams);
+	rxParams = txParams->Copy();
       }
     else if (lteDataRxParams!=0)
       {
@@ -174,8 +190,8 @@ MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
 
 	    double dl_fc = LteSpectrumValueHelper::GetCarrierFrequency(enbDev->GetDlEarfcn());
 	    double ul_fc = LteSpectrumValueHelper::GetCarrierFrequency(enbDev->GetUlEarfcn());
-	    engPutVariable(m_ep,"NFrame", mxCreateDoubleScalar(lteDlCtrlRxParams->frameN));
-	    engPutVariable(m_ep,"NSubframe", mxCreateDoubleScalar(lteDlCtrlRxParams->subframeN));
+	    engPutVariable(m_ep,"NFrame", mxCreateDoubleScalar(lteDataRxParams->frameN));
+	    engPutVariable(m_ep,"NSubframe", mxCreateDoubleScalar(lteDataRxParams->subframeN));
 	    engPutVariable(m_ep,"DL_FC", mxCreateDoubleScalar(dl_fc));
 	    engPutVariable(m_ep,"UL_FC", mxCreateDoubleScalar(ul_fc));
 	    engPutVariable(m_ep,"dlBw", mxCreateDoubleScalar((double)dlBw));
@@ -209,7 +225,8 @@ MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
 	//Generate Ctrl Frame in MATLAB
 	SerializeDataParams (lteDataRxParams);
 	PassThroughChannel ();
-	rxParams = DeserializeDataParams(lteDataRxParams);
+//	rxParams = DeserializeDataParams(lteDataRxParams);
+	rxParams = txParams->Copy();
       }
     else if (lteUlSrsRxParams!=0)
       {
@@ -349,6 +366,12 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 	    break;
 	  }
 	case LteControlMessage::DL_DCI:
+	  {
+//	          Ptr<DlDciLteControlMessage> msg2 = DynamicCast<DlDciLteControlMessage> (msg);
+//
+//	          DlDciListElement_s dci = msg2->GetDci ();
+//	          uint16_t rnti = dci.m_rnti;
+	  }
 
 	  break;
 	case LteControlMessage::DL_HARQ:
@@ -488,7 +511,7 @@ MatlabChannel::PassThroughChannel()
 		      "[pbchRx, pbchHest] = lteExtractResources( ...\n"
 		      "		pbchIndices, rxgrid(:,1:L,:), hest(:,1:L,:,:));\n"
 		      ""
-		      "[bchBits, pbchSymbols, nfmod4, mib, ENB.CellRefP] = ltePBCHDecode(ENB, pbchRx, pbchHest, nest);\n"
+		      "[bchBits, pbchSymbols, nfmod4, mib, CellRefP] = ltePBCHDecode(ENB, pbchRx, pbchHest, nest);\n"
 		      "clear enb;\n"
 		      "enb = lteMIB(mib, ENB);\n"
 		      "enb.NFrame = enb.NFrame+nfmod4;\n"
