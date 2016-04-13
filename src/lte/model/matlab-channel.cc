@@ -38,6 +38,13 @@ MatlabChannel::~MatlabChannel ()
 {
 }
 
+
+
+
+/*
+ * In the MatlabChannel constructor we initialize network wide settings and parameters
+ * that are fixed throughout the simulation, for instance
+ */
 MatlabChannel::MatlabChannel()
 {
   if(!m_ep)
@@ -81,6 +88,11 @@ MatlabChannel::MatlabChannel()
 
 }
 
+/*
+ * The entry point to MATLAB interfacing with ns-3
+ * txParams contains all the necessary information for signal (subframe) description and will be examined to convert
+ * all its content to MATLAB LTE Toolbox structures.
+ */
 void
 MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
 {
@@ -179,8 +191,8 @@ MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
 	//Generate Data Frame in MATLAB
 	SerializeCtrlParams (lteDlCtrlRxParams);
 	PassThroughChannel ();
-//	rxParams = DeserializeCtlrParams(lteDlCtrlRxParams);
-	rxParams = txParams->Copy();
+	rxParams = DeserializeCtlrParams(lteDlCtrlRxParams);
+//	rxParams = txParams->Copy();
       }
     else if (lteDataRxParams!=0)
       {
@@ -225,8 +237,8 @@ MatlabChannel::StartTx (Ptr<SpectrumSignalParameters> txParams)
 	//Generate Ctrl Frame in MATLAB
 	SerializeDataParams (lteDataRxParams);
 	PassThroughChannel ();
-//	rxParams = DeserializeDataParams(lteDataRxParams);
-	rxParams = txParams->Copy();
+	rxParams = DeserializeDataParams(lteDataRxParams);
+//	rxParams = txParams->Copy();
       }
     else if (lteUlSrsRxParams!=0)
       {
@@ -310,6 +322,9 @@ MatlabChannel::SerializeDataParams (Ptr<LteSpectrumSignalParametersDataFrame> pa
   SerializeCtlrMessages(ctrlMsgList);
 }
 
+/*
+ * Starting ns-3 data serialization to Matlab.
+ */
 void
 MatlabChannel::SerializeCtrlParams (Ptr<LteSpectrumSignalParametersDlCtrlFrame> params)
 {
@@ -340,9 +355,11 @@ MatlabChannel::SerializeCtrlParams (Ptr<LteSpectrumSignalParametersDlCtrlFrame> 
 void
 MatlabChannel::SerializeSrsParams (Ptr<LteSpectrumSignalParametersUlSrsFrame> params)
 {
-
+//TODO To be implemented for SRS UL handling
 }
 
+
+//Serializing Control messages other than the reference signals (these are handled in the calling function)
 void
 MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgList)
 {
@@ -356,10 +373,11 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
       switch(msg->GetMessageType())
       {
 	case LteControlMessage::BSR:
-
+	  //TODO BSR message handling
 	  break;
 	case LteControlMessage::DL_CQI:
 	  {
+	    //TODO DL_CQI message handling
 //	    Ptr<DlCqiLteControlMessage> cqiMsg = StaticCast<DlCqiLteControlMessage> (msg);
 //	    CqiListElement_s cqiElements = cqiMsg->GetDlCqi();
 //	    cqiElements.m_cqiType;
@@ -367,6 +385,7 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 	  }
 	case LteControlMessage::DL_DCI:
 	  {
+	    //TODO DL_DCI Proper message handling
 //	          Ptr<DlDciLteControlMessage> msg2 = DynamicCast<DlDciLteControlMessage> (msg);
 //
 //	          DlDciListElement_s dci = msg2->GetDci ();
@@ -375,7 +394,9 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 
 	  break;
 	case LteControlMessage::DL_HARQ:
-
+	  {
+	    //TODO DL_HARQ message handling
+	  }
 	  break;
 	case LteControlMessage::MIB:
 	    {
@@ -403,9 +424,14 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 
 	  break;
 	case LteControlMessage::RACH_PREAMBLE:
-
+	  {
+	    //TODO RACH_PREAMBLE message handling
+	  }
 	  break;
 	case LteControlMessage::RAR:
+	  {
+	    //TODO RAR message handling
+	  }
 
 	  break;
 	case LteControlMessage::SIB1:
@@ -428,12 +454,19 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 	    buffer.CopyData((uint8_t*)mxGetPr(SIB1), bufferSize);
 	    engPutVariable(m_ep, "SIB1", SIB1);
 
+	    //TODO Finish SIB1 handling implementation, the above properly serializes ns-3 SIB1 structure
 	    break;
 	  }
 	case LteControlMessage::UL_CQI:
+	  {
+	    //TODO UL_CQI message handling
+	  }
 
 	  break;
 	case LteControlMessage::UL_DCI:
+	  {
+	    //TODO UL_DCI message handling
+	  }
 
 	  break;
 	default:
@@ -447,6 +480,10 @@ MatlabChannel::SerializeCtlrMessages(std::list<Ptr<LteControlMessage> > ctrlMsgL
 }
 
 
+/*
+ * At this point we properly configure the fading channel model to receive our subframe signal
+ * then attempt to decode it and save the decoded data for later relaying back to ns-3
+ */
 void
 MatlabChannel::PassThroughChannel()
 {
@@ -461,47 +498,6 @@ MatlabChannel::PassThroughChannel()
 		    "cec.InterpType = 'cubic';             % 2D interpolation type\n"
 		    "cec.InterpWindow = 'Centered';        % Interpolation window type\n"
 		    "cec.InterpWinSize = 1;                % Interpolation window size\n");
-//  engEvalString(m_ep,"if (~isfield(ENB,'DuplexMode'))"
-//		      "    duplexModes = {'TDD' 'FDD'};"
-//		      "else"
-//		      "    duplexModes = {ENB.DuplexMode};"
-//		      "end"
-//		      "if (~isfield(ENB,'CyclicPrefix'))"
-//		      "    cyclicPrefixes = {'Normal' 'Extended'};"
-//		      "else"
-//		      "    cyclicPrefixes = {ENB.CyclicPrefix};"
-//		      "end"
-//		      "searchalg.MaxCellCount = 1;"
-//		      "searchalg.SSSDetection = 'PostFFT';"
-//		      "peakMax = -Inf;"
-//		      "enb = ENB;"
-//		      "for duplexMode = duplexModes"
-//		      "	for cyclicPrefix = cyclicPrefixes"
-//		      "		enb.DuplexMode = duplexMode{1};"
-//		      "		enb.CyclicPrefix = cyclicPrefix{1};"
-//		      "		[enb.NCellID, offset, peak] = lteCellSearch(enb, rxWaveform, searchalg);"
-//		      "		if (peak>peakMax)"
-//		      "			enbMax = enb;"
-//		      "			offsetMax = offset;"
-//		      "			peakMax = peak;"
-//		      "		end"
-//		      "	end"
-//		      "end"
-//		      "enb = enbMax;"
-//		      "offset = offsetMax;"
-//		      "corr = cell(1,3);"
-//		      "for i = 0:2"
-//		      "    enb.NCellID = mod(enbMax.NCellID + i,504);"
-//		      "    [~,corr{i+1}] = lteDLFrameOffset(enb, downsampled);"
-//		      "    corr{i+1} = sum(corr{i+1},2);"
-//		      "end"
-//		      "threshold = 1.3 * max([corr{2}; corr{3}]); % multiplier of 1.3 empirically obtained"
-//		      "if (max(corr{1})<threshold)"
-//		      "    warning('Synchronization signal correlation was weak; detected cell identity may be incorrect.');"
-//		      "end"
-//		      "% return to originally detected cell identity"
-//		      "enb.NCellID = enbMax.NCellID;"
-//		      ""
 
   engEvalString(m_ep, "griddims = lteResourceGridSize(ENB);\n"
 		      "L = griddims(2);\n"
@@ -528,6 +524,10 @@ MatlabChannel::PassThroughChannel()
 
 }
 
+
+/*
+ * This function deserlizes back data from MATLAB to ns-3 to close the communication loop
+ */
 Ptr<SpectrumSignalParameters>
 MatlabChannel::DeserializeCtlrParams(Ptr<LteSpectrumSignalParametersDlCtrlFrame> txParams)
 {
@@ -554,8 +554,11 @@ MatlabChannel::DeserializeCtlrParams(Ptr<LteSpectrumSignalParametersDlCtrlFrame>
 
   return rxParams;
 
+  //TODO For the moment only MIB part is handled here, for the future the rest of PDCCH and other to be implemented channels shall also be handled here
 }
 
+
+//TODO implement ULSrs deserialize after SRS UL is properly handled
 Ptr<SpectrumSignalParameters>
 MatlabChannel::DeserializeUlSrsParams(Ptr<LteSpectrumSignalParametersUlSrsFrame> txParams)
 {
@@ -565,6 +568,8 @@ MatlabChannel::DeserializeUlSrsParams(Ptr<LteSpectrumSignalParametersUlSrsFrame>
 
 }
 
+
+//TODO current simulations are restricted to control messages, complete network operation will need this and other functions
 Ptr<SpectrumSignalParameters>
 MatlabChannel::DeserializeDataParams(Ptr<LteSpectrumSignalParametersDataFrame> txParams)
 {
